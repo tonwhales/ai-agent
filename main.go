@@ -2,14 +2,18 @@ package main
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/jacobsa/go-serial/serial"
 )
 
 type Config struct {
@@ -73,8 +77,8 @@ type Job struct {
 	Seed   []byte
 }
 
-func getDigest(d digest) [32]byte {
-	var res [32]byte
+func getDigest(d digest) []byte {
+	var res = make([]byte, 32)
 	binary.BigEndian.PutUint32(res[0:], d.h[0])
 	binary.BigEndian.PutUint32(res[4:], d.h[1])
 	binary.BigEndian.PutUint32(res[8:], d.h[2])
@@ -86,9 +90,39 @@ func getDigest(d digest) [32]byte {
 	return res
 }
 
-func main() {
-	var latestQuery uint32 = 0
+func SerialOpen(path string) (io.ReadWriteCloser, error) {
+	return serial.Open(serial.OpenOptions{
+		PortName: path,
+		BaudRate: 115200,
+		DataBits: 8,
+		StopBits: 2,
+		// mode
+		InterCharacterTimeout: 100,
+		MinimumReadSize:       0,
 
+		RTSCTSFlowControl: false,
+	})
+}
+
+func main() {
+
+	var port io.ReadWriteCloser = nil
+	var err error
+
+	// Arguments
+	portName := flag.String("port", "", "UART port name")
+	flag.Parse()
+	if portName != nil && *portName != "" {
+		fmt.Println("Connecting to COM port...")
+		port, err = SerialOpen(*portName)
+		if err != nil {
+			log.Panicln(err)
+		}
+	} else {
+		fmt.Println("Running without COM port")
+	}
+
+	// Loading config
 	fmt.Println("Loading initial config...")
 	lastestConfig := loadConfigRetry()
 
@@ -103,6 +137,7 @@ func main() {
 
 	// Start threads
 	fmt.Println("Starting threads...")
+	var latestQuery uint32 = 0
 	go (func() {
 		for {
 			config := lastestConfig
@@ -140,29 +175,51 @@ func main() {
 			suffix := data[64:]
 			suffix = append(suffix, 0x80, 0x00, 0x00, 0x00, 0x00)
 
-			counter := []byte{
-				0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0x03, 0xD8}
-			blockGeneric(dg, suffix)
-			blockGeneric(dg, counter)
-			dgst := getDigest(*dg)
+			// Calculate job
+			iterations := 1000000
+			job := []byte{0xa4, 0x61, 0xa1, 0x8c}
+			tmp := make([]byte, 4)
+			binary.BigEndian.PutUint32(tmp, queryId)
+			job = append(job, tmp...)
+			job = append(job, dgst1...)
+			job = append(job, suffix...)
+			binary.BigEndian.PutUint32(tmp, uint32(iterations))
+			job = append(job, tmp...)
 
-			// Call operation
-			h := sha256.New()
-			h.Write(data)
 			fmt.Printf("Data       : %x\n", suffix)
-			fmt.Printf("Iterations : 10000\n")
-			fmt.Printf("%x\n", h.Sum(nil))
-			fmt.Printf("%x\n", dgst)
+			fmt.Printf("Iterations : %d\n", iterations)
+			fmt.Printf("Job        : %x\n", job)
+
+			if port != nil {
+				n, err := (port).Write(job)
+				if err != nil {
+					log.Panicln(err)
+				}
+				if n != len(job) {
+					log.Panicln("Invalid bytes written")
+				}
+			}
+
+			// Debug counter
+			// counter := []byte{
+			// 	0, 0, 0, 0, 0, 0, 0, 0,
+			// 	0, 0, 0, 0, 0, 0, 0, 0,
+			// 	0, 0, 0, 0, 0, 0, 0, 0,
+			// 	0, 0, 0, 0, 0, 0, 0, 0,
+			// 	0, 0, 0, 0, 0, 0, 0, 0,
+			// 	0, 0, 0, 0, 0, 0, 0, 0,
+			// 	0, 0, 0, 0, 0, 0, 0, 0,
+			// 	0, 0, 0, 0, 0, 0, 0x03, 0xD8}
+			// blockGeneric(dg, suffix)
+			// blockGeneric(dg, counter)
+			// dgst := getDigest(*dg)
+			// h := sha256.New()
+			// h.Write(data)
+			// fmt.Printf("%x\n", h.Sum(nil))
+			// fmt.Printf("%x\n", dgst)
 
 			// Delay
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	})()
 
