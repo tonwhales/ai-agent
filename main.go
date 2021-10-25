@@ -170,7 +170,7 @@ func main() {
 
 			// Display job
 			fmt.Printf("Data       : %x\n", suffix)
-			fmt.Printf("Iterations : %d\n", iterations)
+			fmt.Printf("Iterations : %d\n", *iterations)
 			fmt.Printf("Job        : %x\n", job)
 
 			// Send to port if needed

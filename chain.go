@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 
 	"github.com/jacobsa/go-serial/serial"
 )
@@ -28,7 +29,13 @@ func (channel *SerialChannel) PerformJob(data []byte) {
 	job = append(job, data...)
 
 	// Sending
-	channel.RW.Write(job)
+	n, err := channel.RW.Write(job)
+	if err != nil {
+		log.Panicln(err)
+	}
+	if n != len(job) {
+		log.Panicln("Invalid write")
+	}
 
 	// Log result
 	fmt.Printf("Sent job %d\n", queryId)
@@ -37,36 +44,44 @@ func (channel *SerialChannel) PerformJob(data []byte) {
 func (channel *SerialChannel) Start() {
 	go (func() {
 
-		// Read header
-		header := make([]byte, 4)
-		r, e := channel.RW.Read(header)
-		if r != 4 {
-			log.Panic("Invalid header length")
-		}
-		if e != nil {
-			log.Panic(e)
-		}
-		if header[0] != 0x42 || header[1] != 94 || header[2] != 37 || header[3] != 0x9b {
-			log.Panic("Invalid header")
-		}
+		for {
 
-		// Read data
-		data := make([]byte, 100)
-		r, e = channel.RW.Read(data)
-		if r != 100 {
-			log.Panic("Invalid data length")
-		}
-		if e != nil {
-			log.Panic(e)
-		}
+			// Read header
+			header := make([]byte, 4)
+			r, e := channel.RW.Read(header)
+			if e != nil {
+				log.Panic(e)
+			}
+			if r == 0 {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			if r != 4 {
+				log.Panicf("Invalid header length: %d", r)
+			}
+			if header[0] != 0x42 || header[1] != 0x94 || header[2] != 0x37 || header[3] != 0x9b {
+				log.Panicf("Invalid header %x", header)
+			}
 
-		// Parse packet
-		jobId := binary.BigEndian.Uint32(data)
-		hash := data[4 : 32+4]
-		odata := data[32+4:]
+			// Read data
+			data := make([]byte, 44)
+			r, e = channel.RW.Read(data)
+			if r != 44 {
+				log.Panic("Invalid data length")
+			}
+			if e != nil {
+				log.Panic(e)
+			}
 
-		// Print result
-		fmt.Printf("Received %d: %x | %x\n", jobId, hash, odata)
+			// Parse packet
+			jobId := binary.BigEndian.Uint32(data)
+			hash := data[4 : 32+4]
+			odata := data[32+4:]
+
+			// Print result
+			fmt.Printf("Received (RAW) %x%x\n", header, data)
+			fmt.Printf("Received %d: %x | %x\n", jobId, hash, odata)
+		}
 	})()
 }
 
