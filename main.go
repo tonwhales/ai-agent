@@ -99,6 +99,7 @@ func main() {
 	if portName != nil && *portName != "" {
 		fmt.Println("Connecting to COM port...")
 		port, err = SerialOpen(*portName)
+		port.Start()
 		if err != nil {
 			log.Panicln(err)
 		}
