@@ -31,7 +31,7 @@ func (channel *SerialChannel) PerformJob(data []byte) {
 	channel.RW.Write(job)
 
 	// Log result
-	fmt.Printf("Sent job %d", queryId)
+	fmt.Printf("Sent job %d\n", queryId)
 }
 
 func (channel *SerialChannel) Start() {
@@ -66,7 +66,7 @@ func (channel *SerialChannel) Start() {
 		odata := data[32+4:]
 
 		// Print result
-		fmt.Printf("Received %d: %x | %x", jobId, hash, odata)
+		fmt.Printf("Received %d: %x | %x\n", jobId, hash, odata)
 	})()
 }
 

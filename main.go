@@ -94,6 +94,7 @@ func main() {
 
 	// Arguments
 	portName := flag.String("port", "", "UART port name")
+	iterations := flag.Int("iterations", 1000000, "iterations count")
 	flag.Parse()
 	if portName != nil && *portName != "" {
 		fmt.Println("Connecting to COM port...")
@@ -159,12 +160,11 @@ func main() {
 			suffix = append(suffix, 0x80, 0x00, 0x00, 0x00, 0x00)
 
 			// Calculate job
-			iterations := 1000000
 			job := []byte{}
 			job = append(job, dgst1...)
 			job = append(job, suffix...)
 			tmp := make([]byte, 4)
-			binary.BigEndian.PutUint32(tmp, uint32(iterations))
+			binary.BigEndian.PutUint32(tmp, uint32(*iterations))
 			job = append(job, tmp...)
 
 			// Display job
