@@ -7,13 +7,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"sync/atomic"
 	"time"
-
-	"github.com/jacobsa/go-serial/serial"
 )
 
 type Config struct {
@@ -90,23 +87,9 @@ func getDigest(d digest) []byte {
 	return res
 }
 
-func SerialOpen(path string) (io.ReadWriteCloser, error) {
-	return serial.Open(serial.OpenOptions{
-		PortName: path,
-		BaudRate: 115200,
-		DataBits: 8,
-		StopBits: 2,
-		// mode
-		InterCharacterTimeout: 100,
-		MinimumReadSize:       0,
-
-		RTSCTSFlowControl: false,
-	})
-}
-
 func main() {
 
-	var port io.ReadWriteCloser = nil
+	var port *SerialChannel = nil
 	var err error
 
 	// Arguments
@@ -177,46 +160,22 @@ func main() {
 
 			// Calculate job
 			iterations := 1000000
-			job := []byte{0xa4, 0x61, 0xa1, 0x8c}
-			tmp := make([]byte, 4)
-			binary.BigEndian.PutUint32(tmp, queryId)
-			job = append(job, tmp...)
+			job := []byte{}
 			job = append(job, dgst1...)
 			job = append(job, suffix...)
+			tmp := make([]byte, 4)
 			binary.BigEndian.PutUint32(tmp, uint32(iterations))
 			job = append(job, tmp...)
 
+			// Display job
 			fmt.Printf("Data       : %x\n", suffix)
 			fmt.Printf("Iterations : %d\n", iterations)
 			fmt.Printf("Job        : %x\n", job)
 
+			// Send to port if needed
 			if port != nil {
-				n, err := (port).Write(job)
-				if err != nil {
-					log.Panicln(err)
-				}
-				if n != len(job) {
-					log.Panicln("Invalid bytes written")
-				}
+				port.PerformJob(job)
 			}
-
-			// Debug counter
-			// counter := []byte{
-			// 	0, 0, 0, 0, 0, 0, 0, 0,
-			// 	0, 0, 0, 0, 0, 0, 0, 0,
-			// 	0, 0, 0, 0, 0, 0, 0, 0,
-			// 	0, 0, 0, 0, 0, 0, 0, 0,
-			// 	0, 0, 0, 0, 0, 0, 0, 0,
-			// 	0, 0, 0, 0, 0, 0, 0, 0,
-			// 	0, 0, 0, 0, 0, 0, 0, 0,
-			// 	0, 0, 0, 0, 0, 0, 0x03, 0xD8}
-			// blockGeneric(dg, suffix)
-			// blockGeneric(dg, counter)
-			// dgst := getDigest(*dg)
-			// h := sha256.New()
-			// h.Write(data)
-			// fmt.Printf("%x\n", h.Sum(nil))
-			// fmt.Printf("%x\n", dgst)
 
 			// Delay
 			time.Sleep(5 * time.Second)
