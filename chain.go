@@ -2,31 +2,53 @@ package main
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/jacobsa/go-serial/serial"
 )
 
 type SerialChannel struct {
-	queryId uint32
-	Closed  bool
-	RW      io.ReadWriteCloser
+	queryId   uint32
+	Closed    bool
+	RW        io.ReadWriteCloser
+	mu        sync.Mutex
+	callbacks map[uint32]chan []byte
 }
 
-func (channel *SerialChannel) PerformJob(data []byte) {
+func (channel *SerialChannel) PerformJob(data []byte) []byte {
 	queryId := channel.queryId
 	channel.queryId++
 
-	// Job Header
+	// Package
 	job := []byte{0xa4, 0x61, 0xa1, 0x8c}
 	tmp := make([]byte, 4)
 	binary.BigEndian.PutUint32(tmp, queryId)
-
-	// Job body
+	job = append(job, tmp...)
 	job = append(job, data...)
+
+	// Persist job
+	channel.mu.Lock()
+	ch := make(chan []byte)
+	channel.callbacks[queryId] = ch
+	channel.mu.Unlock()
+
+	// Timeout
+	timeout := time.NewTimer(time.Second)
+	go (func() {
+		<-timeout.C
+
+		channel.mu.Lock()
+		ex := channel.callbacks[queryId]
+		channel.callbacks[queryId] = nil
+		channel.mu.Unlock()
+
+		if ex != nil {
+			ex <- make([]byte, 0)
+		}
+	})()
 
 	// Sending
 	n, err := channel.RW.Write(job)
@@ -38,7 +60,13 @@ func (channel *SerialChannel) PerformJob(data []byte) {
 	}
 
 	// Log result
-	fmt.Printf("Sent job %d\n", queryId)
+	log.Printf("Sent job %d| %x\n", queryId, job)
+
+	r := <-ch
+	if len(r) == 0 {
+		log.Panicln("Invalid response")
+	}
+	return r
 }
 
 func (channel *SerialChannel) Start() {
@@ -75,12 +103,22 @@ func (channel *SerialChannel) Start() {
 
 			// Parse packet
 			jobId := binary.BigEndian.Uint32(data)
-			hash := data[4 : 32+4]
-			odata := data[32+4:]
+			body := data[4:]
 
 			// Print result
-			fmt.Printf("Received (RAW) %x%x\n", header, data)
-			fmt.Printf("Received %d: %x | %x\n", jobId, hash, odata)
+			log.Printf("Received (RAW) %x %x\n", header, data)
+			log.Printf("Received (BODY) %d: %x\n", jobId, body)
+
+			// Response
+			channel.mu.Lock()
+			rch := channel.callbacks[jobId]
+			channel.callbacks[jobId] = nil
+			channel.mu.Unlock()
+			if rch != nil {
+				rch <- body
+			} else {
+				log.Printf("Unable to find callback for %d\n", jobId)
+			}
 		}
 	})()
 }

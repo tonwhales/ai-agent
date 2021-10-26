@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"sync/atomic"
@@ -97,22 +96,22 @@ func main() {
 	iterations := flag.Int("iterations", 1000000, "iterations count")
 	flag.Parse()
 	if portName != nil && *portName != "" {
-		fmt.Println("Connecting to COM port...")
+		log.Println("Connecting to COM port...")
 		port, err = SerialOpen(*portName)
 		port.Start()
 		if err != nil {
 			log.Panicln(err)
 		}
 	} else {
-		fmt.Println("Running without COM port")
+		log.Println("Running without COM port")
 	}
 
 	// Loading config
-	fmt.Println("Loading initial config...")
+	log.Println("Loading initial config...")
 	lastestConfig := loadConfigRetry()
 
 	// Start config refetch loop
-	fmt.Println("Starting config refresh...")
+	log.Println("Starting config refresh...")
 	go (func() {
 		for {
 			lastestConfig = loadConfigRetry()
@@ -121,13 +120,13 @@ func main() {
 	})()
 
 	// Start threads
-	fmt.Println("Starting threads...")
+	log.Println("Starting threads...")
 	var latestQuery uint32 = 0
 	go (func() {
 		for {
 			config := lastestConfig
 			queryId := atomic.AddUint32(&latestQuery, 1)
-			fmt.Printf("Attempt    : %d\n", queryId)
+			log.Printf("Attempt    : %d\n", queryId)
 
 			// Create random
 			random := make([]byte, 32)
@@ -154,7 +153,7 @@ func main() {
 			dg.h[7] = init7
 			blockGeneric(dg, prefix)
 			dgst1 := getDigest(*dg)
-			fmt.Printf("H          : %x\n", dgst1)
+			log.Printf("H          : %x\n", dgst1)
 
 			// Suffix
 			suffix := data[64:]
@@ -169,13 +168,20 @@ func main() {
 			job = append(job, tmp...)
 
 			// Display job
-			fmt.Printf("Data       : %x\n", suffix)
-			fmt.Printf("Iterations : %d\n", *iterations)
-			fmt.Printf("Job        : %x\n", job)
+			log.Printf("Data       : %x\n", suffix)
+			log.Printf("Iterations : %d\n", *iterations)
+			log.Printf("Job        : %x\n", job)
 
 			// Send to port if needed
 			if port != nil {
-				port.PerformJob(job)
+				start := time.Now()
+				jobResponse := port.PerformJob(job)
+				if len(jobResponse) == 0 {
+					log.Panicln("Unable to get response")
+				} else {
+					log.Printf("Job completed in %v", time.Since(start))
+					log.Printf("Received job result: %x", jobResponse)
+				}
 			}
 
 			// Delay
