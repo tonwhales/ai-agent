@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -180,7 +181,28 @@ func main() {
 					log.Panicln("Unable to get response")
 				} else {
 					log.Printf("Job completed in %v", time.Since(start))
-					log.Printf("Received job result: %x", jobResponse)
+
+					// Prepare Data
+					hash := jobResponse[0:32]
+					nonce := jobResponse[32 : 32+4]
+					xored := append([]byte(nil), suffix...)
+					for i := 0; i < len(nonce); i++ {
+						xored[i] = xored[i] ^ nonce[i]
+						xored[i+11] = xored[i+11] ^ nonce[i]
+					}
+
+					// Check hash
+					sh := sha256.New()
+					sh.Write(prefix)
+					sh.Write(suffix[:64-5])
+					localHash := sh.Sum(nil)
+
+					// Print results
+					log.Printf("RAW       : %x", jobResponse)
+					log.Printf("DATA      : %x", suffix)
+					log.Printf("XORED DATA: %x", xored)
+					log.Printf("FPGA HASH : %x", hash)
+					log.Printf("LOCAL HASH: %x", localHash)
 				}
 			}
 

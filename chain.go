@@ -92,9 +92,9 @@ func (channel *SerialChannel) Start() {
 			}
 
 			// Read data
-			data := make([]byte, 44)
+			data := make([]byte, 40)
 			r, e = channel.RW.Read(data)
-			if r != 44 {
+			if r != 40 {
 				log.Panic("Invalid data length")
 			}
 			if e != nil {
