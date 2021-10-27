@@ -42,7 +42,9 @@ func (channel *SerialChannel) PerformJob(data []byte) []byte {
 
 		channel.mu.Lock()
 		ex := channel.callbacks[queryId]
-		channel.callbacks[queryId] = nil
+		if ex != nil {
+			delete(channel.callbacks, queryId)
+		}
 		channel.mu.Unlock()
 
 		if ex != nil {
@@ -112,7 +114,9 @@ func (channel *SerialChannel) Start() {
 			// Response
 			channel.mu.Lock()
 			rch := channel.callbacks[jobId]
-			channel.callbacks[jobId] = nil
+			if rch != nil {
+				delete(channel.callbacks, jobId)
+			}
 			channel.mu.Unlock()
 			if rch != nil {
 				rch <- body
@@ -143,6 +147,6 @@ func SerialOpen(path string) (*SerialChannel, error) {
 	if err != nil {
 		return nil, err
 	} else {
-		return &SerialChannel{RW: res, Closed: false, queryId: 0}, nil
+		return &SerialChannel{RW: res, Closed: false, queryId: 0, callbacks: make(map[uint32]chan []byte)}, nil
 	}
 }
