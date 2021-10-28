@@ -137,8 +137,8 @@ func performJob(port *SerialChannel, data []byte, iterations uint32) {
 			nonce := jobResponse[32 : 32+4]
 			xored := append([]byte(nil), suffix...)
 			for i := 0; i < len(nonce); i++ {
-				xored[i] = xored[i] ^ nonce[i]
-				xored[i+48] = xored[i+48] ^ nonce[i]
+				xored[i] = nonce[i]
+				xored[i+48] = nonce[i]
 			}
 
 			// Check hash
@@ -148,12 +148,12 @@ func performJob(port *SerialChannel, data []byte, iterations uint32) {
 			localHash := sh.Sum(nil)
 
 			// Print results
-			log.Printf("RAW       : %x", jobResponse)
-			log.Printf("DATA      : %x", suffix)
-			log.Printf("XORED DATA: %x", xored)
-			log.Printf("FPGA NONCE: %x", nonce)
-			log.Printf("FPGA HASH : %x", hash)
-			log.Printf("LOCAL HASH: %x", localHash)
+			log.Printf("RAW          : %x", jobResponse)
+			log.Printf("DATA         : %x", suffix)
+			log.Printf("PREPARED DATA: %x", xored)
+			log.Printf("FPGA NONCE   : %x", nonce)
+			log.Printf("FPGA HASH    : %x", hash)
+			log.Printf("LOCAL HASH   : %x", localHash)
 		}
 	}
 }
