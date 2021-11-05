@@ -89,7 +89,7 @@ func getDigest(d digest) []byte {
 	return res
 }
 
-func performJob(port *SerialChannel, data []byte, iterations uint32) {
+func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int) {
 
 	// Hash prefix
 	prefix := data[:64]
@@ -126,7 +126,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32) {
 	// Send to port if needed
 	if port != nil {
 		start := time.Now()
-		jobResponse := port.PerformJob(job)
+		jobResponse := port.PerformJob(job, timeout)
 		if len(jobResponse) == 0 {
 			log.Panicln("Unable to get response")
 		} else {
@@ -134,7 +134,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32) {
 
 			// Prepare Data
 			hash := jobResponse[0:32]
-			nonce := jobResponse[32 : 32+4]
+			nonce := jobResponse[32 : 32+8]
 			xored := append([]byte(nil), suffix...)
 			for i := 0; i < len(nonce); i++ {
 				xored[i] = nonce[i]
@@ -144,7 +144,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32) {
 			// Check hash
 			sh := sha256.New()
 			sh.Write(prefix)
-			sh.Write(suffix[:64-5])
+			sh.Write(xored[:64-5])
 			localHash := sh.Sum(nil)
 
 			// Print results
@@ -167,6 +167,7 @@ func main() {
 	portName := flag.String("port", "", "UART port name")
 	iterations := flag.Int("iterations", 1000000, "iterations count")
 	config := flag.String("config", "", "Custom config")
+	timeout := flag.Int("timeout", 5, "job timeout")
 	flag.Parse()
 
 	// Port
@@ -209,7 +210,7 @@ func main() {
 				log.Printf("Attempt    : %d\n", queryId)
 
 				// Do Job
-				performJob(port, data, uint32(*iterations))
+				performJob(port, data, uint32(*iterations), *timeout)
 
 				// Delay
 				time.Sleep(5 * time.Second)
@@ -252,7 +253,7 @@ func main() {
 				data = append(data, random...)
 
 				// Do Job
-				performJob(port, data, uint32(*iterations))
+				performJob(port, data, uint32(*iterations), *timeout)
 
 				// Delay
 				time.Sleep(5 * time.Second)

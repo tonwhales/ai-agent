@@ -18,7 +18,7 @@ type SerialChannel struct {
 	callbacks map[uint32]chan []byte
 }
 
-func (channel *SerialChannel) PerformJob(data []byte) []byte {
+func (channel *SerialChannel) PerformJob(data []byte, timeoutDuration int) []byte {
 	queryId := channel.queryId
 	channel.queryId++
 
@@ -36,7 +36,7 @@ func (channel *SerialChannel) PerformJob(data []byte) []byte {
 	channel.mu.Unlock()
 
 	// Timeout
-	timeout := time.NewTimer(time.Second)
+	timeout := time.NewTimer(time.Second * time.Duration(timeoutDuration))
 	go (func() {
 		<-timeout.C
 
@@ -94,9 +94,9 @@ func (channel *SerialChannel) Start() {
 			}
 
 			// Read data
-			data := make([]byte, 40)
+			data := make([]byte, 44)
 			r, e = channel.RW.Read(data)
-			if r != 40 {
+			if r != 44 {
 				log.Panic("Invalid data length")
 			}
 			if e != nil {
