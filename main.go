@@ -32,7 +32,7 @@ type ApiConfig struct {
 }
 
 func loadConfig() (config *Config, err error) {
-	resp, err := client.Get("http://localhost:3000/params")
+	resp, err := client.Get("https://pool.tonwhales.com/params")
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func doReport(device string, key string, random []byte, seed []byte, value []byt
 	}
 
 	// Report
-	request, err := http.NewRequest("POST", "http://localhost:3000/report", bytes.NewBuffer(dataBin))
+	request, err := http.NewRequest("POST", "https://pool.tonwhales.com/report", bytes.NewBuffer(dataBin))
 	if err != nil {
 		fmt.Println(err)
 		return err
