@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -8,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -16,23 +18,21 @@ import (
 )
 
 type Config struct {
-	ID        string
-	Reference string
-	Header    []byte
-	Seed      []byte
+	Key    string
+	Header []byte
+	Seed   []byte
 }
 
 var client = &http.Client{Timeout: 10 * time.Second}
 
 type ApiConfig struct {
-	Id     string `json:"id"`
-	Ref    string `json:"ref"`
+	Key    string `json:"key"`
 	Header string `json:"header"`
 	Seed   string `json:"seed"`
 }
 
 func loadConfig() (config *Config, err error) {
-	resp, err := client.Get("http://64.225.102.108:3000/params")
+	resp, err := client.Get("http://localhost:3000/params")
 	if err != nil {
 		return nil, err
 	}
@@ -53,8 +53,7 @@ func loadConfig() (config *Config, err error) {
 		return nil, err
 	}
 	r := Config{}
-	r.ID = res.Id
-	r.Reference = res.Ref
+	r.Key = res.Key
 	r.Header = header
 	r.Seed = seed
 	return &r, nil
@@ -70,10 +69,55 @@ func loadConfigRetry() Config {
 	}
 }
 
-type Job struct {
-	Data   []byte
-	Random []byte
-	Seed   []byte
+type Report struct {
+	Device string `json:"device"`
+	Key    string `json:"key"`
+	Random string `json:"random"`
+	Value  string `json:"value"`
+}
+
+func doReport(device string, key string, random []byte, seed []byte, value []byte) error {
+
+	// Encode report
+	data := Report{
+		Device: device,
+		Key:    key,
+		Random: base64.StdEncoding.EncodeToString(random),
+		Value:  base64.StdEncoding.EncodeToString(value),
+	}
+	dataBin, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	// Report
+	request, err := http.NewRequest("POST", "http://localhost:3000/report", bytes.NewBuffer(dataBin))
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	resp, err := client.Do(request)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func reportAsync(device string, key string, random []byte, seed []byte, value []byte) {
+	go (func() {
+		for {
+			err := doReport(device, key, random, seed, value)
+			if err == nil {
+				return
+			}
+			time.Sleep(5 * time.Second)
+		}
+	})()
 }
 
 func getDigest(d digest) []byte {
@@ -89,7 +133,12 @@ func getDigest(d digest) []byte {
 	return res
 }
 
-func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int) {
+type JobResult struct {
+	Random []byte
+	Value  []byte
+}
+
+func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int) *JobResult {
 
 	// Hash prefix
 	prefix := data[:64]
@@ -108,6 +157,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 
 	// Suffix
 	suffix := data[64:]
+	random := suffix[27:]
 	suffix = append(suffix, 0x80, 0x00, 0x00, 0x00, 0x00)
 
 	// Calculate job
@@ -120,6 +170,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 
 	// Display job
 	log.Printf("Data       : %x\n", suffix)
+	log.Printf("Random     : %x\n", random)
 	log.Printf("Iterations : %d\n", iterations)
 	log.Printf("Job        : %x\n", job)
 
@@ -128,7 +179,8 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 		start := time.Now()
 		jobResponse := port.PerformJob(job, timeout)
 		if len(jobResponse) == 0 {
-			log.Panicln("Unable to get response")
+			log.Printf("Unable to get response\n")
+			return nil
 		} else {
 			log.Printf("Job completed in %v", time.Since(start))
 
@@ -136,9 +188,11 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 			hash := jobResponse[0:32]
 			nonce := jobResponse[32 : 32+8]
 			xored := append([]byte(nil), suffix...)
+			nrandom := append([]byte(nil), random...)
 			for i := 0; i < len(nonce); i++ {
 				xored[i] = nonce[i]
 				xored[i+48] = nonce[i]
+				nrandom[i+21] = nonce[i]
 			}
 
 			// Check hash
@@ -151,10 +205,60 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 			log.Printf("RAW          : %x", jobResponse)
 			log.Printf("DATA         : %x", suffix)
 			log.Printf("PREPARED DATA: %x", xored)
+			log.Printf("RANDOM       : %x", nrandom)
 			log.Printf("FPGA NONCE   : %x", nonce)
 			log.Printf("FPGA HASH    : %x", hash)
 			log.Printf("LOCAL HASH   : %x", localHash)
+
+			return &JobResult{Random: nrandom, Value: localHash}
 		}
+	} else {
+
+		//
+		// CPU-based miner
+		//
+
+		min := make([]byte, 32)
+		minNonce := make([]byte, 4)
+		for i := 0; i < int(iterations); i++ {
+
+			// Create nonce
+			nonce := make([]byte, 4)
+			binary.BigEndian.PutUint32(nonce, uint32(i))
+			xored := append([]byte(nil), suffix...)
+			for i := 0; i < len(nonce); i++ {
+				xored[i] = nonce[i]
+				xored[i+48] = nonce[i]
+			}
+
+			// Calculate hash
+			sh := sha256.New()
+			sh.Write(prefix)
+			sh.Write(xored[:64-5])
+			localHash := sh.Sum(nil)
+
+			// Update minimum
+			if i == 0 {
+				min = localHash
+				minNonce = nonce
+			} else {
+				if bytes.Compare(localHash, min) < 0 {
+					min = localHash
+					minNonce = nonce
+				}
+			}
+		}
+
+		nrandom := append([]byte(nil), random...)
+		for i := 0; i < len(minNonce); i++ {
+			nrandom[i+21] = minNonce[i]
+		}
+
+		log.Printf("CPU RANDOM : %x", nrandom)
+		log.Printf("CPU NONCE  : %x", minNonce)
+		log.Printf("CPU HASH   : %x", min)
+
+		return &JobResult{Random: nrandom, Value: min}
 	}
 }
 
@@ -168,6 +272,7 @@ func main() {
 	iterations := flag.Int("iterations", 1000000, "iterations count")
 	config := flag.String("config", "", "Custom config")
 	timeout := flag.Int("timeout", 5, "job timeout")
+	deviceName := flag.String("name", "dev", "Device name")
 	flag.Parse()
 
 	// Port
@@ -210,10 +315,10 @@ func main() {
 				log.Printf("Attempt    : %d\n", queryId)
 
 				// Do Job
-				performJob(port, data, uint32(*iterations), *timeout)
-
-				// Delay
-				time.Sleep(5 * time.Second)
+				result := performJob(port, data, uint32(*iterations), *timeout)
+				if result == nil {
+					log.Printf("Unable to get results")
+				}
 			}
 		})()
 	} else {
@@ -246,17 +351,20 @@ func main() {
 
 				// Create block
 				data := make([]byte, 0)
-				data = append(data, 0x0, 0xF2)
 				data = append(data, config.Header...)
 				data = append(data, random...)
 				data = append(data, config.Seed...)
 				data = append(data, random...)
 
 				// Do Job
-				performJob(port, data, uint32(*iterations), *timeout)
+				result := performJob(port, data, uint32(*iterations), *timeout)
 
-				// Delay
-				time.Sleep(5 * time.Second)
+				// Process
+				if result == nil {
+					log.Printf("Unable to get results")
+				} else {
+					reportAsync(*deviceName, config.Key, result.Random, config.Seed, result.Value)
+				}
 			}
 		})()
 	}
