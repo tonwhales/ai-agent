@@ -277,6 +277,7 @@ func main() {
 	timeout := flag.Int("timeout", 5, "job timeout")
 	deviceName := flag.String("name", "dev", "Device name")
 	test := flag.Bool("test", false, "Use test serial debug")
+	supervised := flag.Bool("supervised", false, "Supervised invironment")
 	flag.Parse()
 
 	// Test
@@ -319,6 +320,11 @@ func main() {
 			}
 			log.Printf("%x", bt)
 		}
+	}
+
+	// Check supervised flag
+	if supervised != nil && *supervised {
+		log.Panicln("Running in supervised mode")
 	}
 
 	// Port
