@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -44,10 +45,6 @@ func loadConfig() Config {
 		log.Println(e)
 		time.Sleep(5 * time.Second)
 	}
-}
-
-func errorDelay() {
-	time.Sleep(15 * time.Second)
 }
 
 func Unzip(src, dest string) error {
@@ -123,11 +120,11 @@ func Unzip(src, dest string) error {
 func downloadPackage(config Config) {
 
 	// Recreate tmp directory
-	err := os.RemoveAll("tmp")
+	err := os.RemoveAll("/monad/imperium/software/tmp")
 	if err != nil {
 		panic(err)
 	}
-	err = os.MkdirAll("tmp", os.ModePerm)
+	err = os.MkdirAll("/monad/imperium/software/tmp", os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
@@ -143,7 +140,7 @@ func downloadPackage(config Config) {
 	}
 
 	// Create the file
-	out, err := os.Create("./tmp/output.zip")
+	out, err := os.Create("/monad/imperium/software/tmp/output.zip")
 	if err != nil {
 		panic(err)
 	}
@@ -156,7 +153,7 @@ func downloadPackage(config Config) {
 	}
 
 	// Unzip
-	err = Unzip("./tmp/output.zip", "./tmp/extracted")
+	err = Unzip("/monad/imperium/software/tmp/output.zip", "/monad/imperium/software/tmp/extracted")
 	if err != nil {
 		panic(err)
 	}
@@ -166,18 +163,18 @@ func downloadPackage(config Config) {
 	if err != nil {
 		panic(err)
 	}
-	err = os.WriteFile("./tmp/extracted/config.json", cfg, 0644)
+	err = os.WriteFile("/monad/imperium/software/tmp/extracted/config.json", cfg, 0644)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func applyPackage() error {
-	err := os.RemoveAll("work")
+	err := os.RemoveAll("/monad/imperium/software/work/")
 	if err != nil {
 		return err
 	}
-	err = os.Rename("./tmp/extracted", "./work")
+	err = os.Rename("/monad/imperium/software/tmp/extracted", "/monad/imperium/software/work")
 	if err != nil {
 		return err
 	}
@@ -187,19 +184,43 @@ func applyPackage() error {
 
 func stopAgent() {
 	fmt.Println("Stopping agent...")
-	// TODO: Implement
+	req, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:9001/program/stop/agent", bytes.NewBuffer(make([]byte, 0)))
+	if err != nil {
+		panic(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		panic("Unable to stop agent")
+	}
+	fmt.Println("Stopped agent")
 }
 
 func startAgent() {
 	fmt.Println("Starting agent...")
-	// TODO: Implement
+	req, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:9001/program/start/agent", bytes.NewBuffer(make([]byte, 0)))
+	if err != nil {
+		panic(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		panic("Unable to stop agent")
+	}
+	fmt.Println("Started agent")
 }
 
 func main() {
 
 	// Loading current version
 	currentVersion := "#invalid#"
-	if _, err := os.Stat("./work/config.json"); os.IsExist(err) {
+	if _, err := os.Stat("/monad/imperium/software/work/config.json"); os.IsExist(err) {
 		fmt.Println("Fetching latest config...")
 	} else {
 		fmt.Println("No existing package. Downloading package")
@@ -209,14 +230,19 @@ func main() {
 	config := loadConfig()
 	fmt.Printf("Found new version: %s\n", config.Version)
 	if config.Version != currentVersion {
+		// Download update
 		fmt.Printf("Downloading %s\n", config.Version)
 		downloadPackage(config)
 		fmt.Println("Downloaded")
+
+		// Stop Agent
+		stopAgent()
+
+		// Apply package
 		applyPackage()
 	}
 
 	// Start
-	stopAgent()
 	startAgent()
 
 	// Start refresh loop
@@ -225,7 +251,7 @@ func main() {
 			nc := loadConfig()
 			if nc.Version != config.Version {
 
-				fmt.Printf("Found new version: %s\n", config.Version)
+				fmt.Printf("Found new version: %s\n", nc.Version)
 
 				// Download
 				downloadPackage(nc)
@@ -241,6 +267,9 @@ func main() {
 
 				// Start
 				startAgent()
+
+				// Update config
+				config = nc
 			}
 			time.Sleep(5 * time.Second)
 		}

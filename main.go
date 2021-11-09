@@ -324,7 +324,7 @@ func main() {
 
 	// Check supervised flag
 	if supervised != nil && *supervised {
-		log.Panicln("Running in supervised mode")
+		log.Println("Running in supervised mode")
 	}
 
 	// Port
