@@ -186,7 +186,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 
 			// Prepare Data
 			hash := jobResponse[0:32]
-			nonce := jobResponse[32 : 32+8]
+			nonce := jobResponse[32 : 32+NonceSize]
 			xored := append([]byte(nil), suffix...)
 			nrandom := append([]byte(nil), random...)
 			for i := 0; i < len(nonce); i++ {

@@ -10,6 +10,8 @@ import (
 	"github.com/jacobsa/go-serial/serial"
 )
 
+const NonceSize = 4
+
 type SerialChannel struct {
 	queryId   uint32
 	Closed    bool
@@ -94,7 +96,7 @@ func (channel *SerialChannel) Start() {
 			}
 
 			// Read data
-			data := make([]byte, 44)
+			data := make([]byte, 36+NonceSize)
 			r, e = channel.RW.Read(data)
 			if r != 44 {
 				log.Panic("Invalid data length")
