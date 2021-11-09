@@ -82,6 +82,12 @@ func (channel *SerialChannel) Start() {
 			header := make([]byte, 4)
 			r, e := channel.RW.Read(header)
 			if e != nil {
+				switch e {
+				case io.EOF:
+					continue
+				default:
+					log.Panic(e)
+				}
 				log.Panic(e)
 			}
 			if r == 0 {

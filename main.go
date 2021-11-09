@@ -10,11 +10,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/jacobsa/go-serial/serial"
 )
 
 type Config struct {
@@ -273,7 +276,50 @@ func main() {
 	config := flag.String("config", "", "Custom config")
 	timeout := flag.Int("timeout", 5, "job timeout")
 	deviceName := flag.String("name", "dev", "Device name")
+	test := flag.Bool("test", false, "Use test serial debug")
 	flag.Parse()
+
+	// Test
+	if test != nil && *test {
+		if portName == nil || *portName == "" {
+			log.Panicln("No port specified")
+		}
+
+		log.Println("Connecting to COM port...")
+		pp, err := serial.Open(serial.OpenOptions{
+			PortName: *portName,
+			BaudRate: 115200,
+			DataBits: 8,
+			StopBits: 2,
+
+			// mode
+			InterCharacterTimeout: 100,
+			MinimumReadSize:       0,
+
+			RTSCTSFlowControl: false,
+		})
+		if err != nil {
+			log.Panicln(err)
+		}
+
+		bt := make([]byte, 1)
+		for {
+			log.Println("Reading...")
+			r, err := pp.Read(bt)
+			if err != nil {
+				switch err {
+				case io.EOF:
+					continue
+				default:
+					log.Panic(err)
+				}
+			}
+			if r != 1 {
+				log.Panic("Empty")
+			}
+			log.Printf("%x", bt)
+		}
+	}
 
 	// Port
 	if portName != nil && *portName != "" {
