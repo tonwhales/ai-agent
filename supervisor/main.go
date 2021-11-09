@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
-
-	cmd "github.com/ShinyTrinkets/overseer"
 )
 
 type Config struct {
@@ -43,6 +41,7 @@ func loadConfig() Config {
 		if e == nil {
 			return *c
 		}
+		log.Println(e)
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -123,75 +122,53 @@ func Unzip(src, dest string) error {
 
 func downloadPackage(config Config) {
 
-	for {
-		// Recreate tmp directory
-		err := os.RemoveAll("tmp")
-		if err != nil {
-			fmt.Println(err)
-			errorDelay()
-			continue
-		}
-		err = os.MkdirAll("tmp", os.ModePerm)
-		if err != nil {
-			fmt.Println(err)
-			errorDelay()
-			continue
-		}
+	// Recreate tmp directory
+	err := os.RemoveAll("tmp")
+	if err != nil {
+		panic(err)
+	}
+	err = os.MkdirAll("tmp", os.ModePerm)
+	if err != nil {
+		panic(err)
+	}
 
-		// Download package
-		resp, err := http.Get(config.Url)
-		if err != nil {
-			fmt.Println(err)
-			errorDelay()
-			continue
-		}
+	// Download package
+	resp, err := http.Get(config.Url)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		panic(err)
+	}
 
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			errorDelay()
-			continue
-		}
+	// Create the file
+	out, err := os.Create("./tmp/output.zip")
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
 
-		// Create the file
-		out, err := os.Create("./tmp/output.zip")
-		if err != nil {
-			fmt.Println(err)
-			errorDelay()
-			continue
-		}
-		defer out.Close()
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		panic(err)
+	}
 
-		// Write the body to file
-		_, err = io.Copy(out, resp.Body)
-		if err != nil {
-			fmt.Println(err)
-			errorDelay()
-			continue
-		}
+	// Unzip
+	err = Unzip("./tmp/output.zip", "./tmp/extracted")
+	if err != nil {
+		panic(err)
+	}
 
-		// Unzip
-		err = Unzip("./tmp/output.zip", "./tmp/extracted")
-		if err != nil {
-			fmt.Println(err)
-			errorDelay()
-			continue
-		}
-
-		// Write descriptor
-		cfg, err := json.Marshal(config)
-		if err != nil {
-			fmt.Println(err)
-			errorDelay()
-			continue
-		}
-		err = os.WriteFile("./tmp/extracted/config.json", cfg, 0644)
-		if err != nil {
-			fmt.Println(err)
-			errorDelay()
-			continue
-		}
-
-		return
+	// Write descriptor
+	cfg, err := json.Marshal(config)
+	if err != nil {
+		panic(err)
+	}
+	err = os.WriteFile("./tmp/extracted/config.json", cfg, 0644)
+	if err != nil {
+		panic(err)
 	}
 }
 
@@ -208,15 +185,17 @@ func applyPackage() error {
 	return nil
 }
 
-func main() {
+func stopAgent() {
+	fmt.Println("Stopping agent...")
+	// TODO: Implement
+}
 
-	ovr := cmd.NewOverseer()
-	cmdOptions := cmd.Options{
-		RetryTimes: 10000000,
-		Buffered:   false,
-		Streaming:  true,
-	}
-	agent := ovr.Add("ai-agent", "/bin/sh", []string{path.Join(".", "work", "start.sh")}, cmdOptions)
+func startAgent() {
+	fmt.Println("Starting agent...")
+	// TODO: Implement
+}
+
+func main() {
 
 	// Loading current version
 	currentVersion := "#invalid#"
@@ -228,16 +207,17 @@ func main() {
 
 	// Prepare package
 	config := loadConfig()
-	fmt.Printf("Loaded %s\n", config.Version)
+	fmt.Printf("Found new version: %s\n", config.Version)
 	if config.Version != currentVersion {
-		fmt.Println("Downloading...")
+		fmt.Printf("Downloading %s\n", config.Version)
 		downloadPackage(config)
 		fmt.Println("Downloaded")
 		applyPackage()
 	}
 
 	// Start
-	agent.Start()
+	stopAgent()
+	startAgent()
 
 	// Start refresh loop
 	go (func() {
@@ -245,26 +225,26 @@ func main() {
 			nc := loadConfig()
 			if nc.Version != config.Version {
 
+				fmt.Printf("Found new version: %s\n", config.Version)
+
 				// Download
 				downloadPackage(nc)
 
 				// Stop
-				agent.Stop()
+				stopAgent()
 
 				// Apply package
 				err := applyPackage()
-
 				if err != nil {
-					errorDelay()
-					continue
+					panic(err)
 				}
 
 				// Start
-				agent.Start()
+				startAgent()
 			}
 			time.Sleep(5 * time.Second)
 		}
 	})()
 
-	ovr.Supervise("ai-agent")
+	select {}
 }
