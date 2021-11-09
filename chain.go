@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"log"
@@ -73,40 +74,47 @@ func (channel *SerialChannel) PerformJob(data []byte, timeoutDuration int) []byt
 	return r
 }
 
+func ReadAll(reader io.Reader, size int) ([]byte, error) {
+	bt := make([]byte, 1)
+	buffer := bytes.NewBuffer(nil)
+	read := 0
+	for {
+		n, err := reader.Read(bt)
+		switch err {
+		case io.EOF:
+			continue
+		case nil:
+		default:
+			return nil, err
+		}
+		if n == 0 {
+			continue
+		}
+		buffer.WriteByte(bt[0])
+		read++
+		if read >= size {
+			break
+		}
+	}
+	return buffer.Bytes(), nil
+}
+
 func (channel *SerialChannel) Start() {
 	go (func() {
 
 		for {
 
 			// Read header
-			header := make([]byte, 4)
-			r, e := channel.RW.Read(header)
+			header, e := ReadAll(channel.RW, 4)
 			if e != nil {
-				switch e {
-				case io.EOF:
-					continue
-				default:
-					log.Panic(e)
-				}
 				log.Panic(e)
-			}
-			if r == 0 {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			if r != 4 {
-				log.Panicf("Invalid header length: %d", r)
 			}
 			if header[0] != 0x42 || header[1] != 0x94 || header[2] != 0x37 || header[3] != 0x9b {
 				log.Panicf("Invalid header %x", header)
 			}
 
 			// Read data
-			data := make([]byte, 36+NonceSize)
-			r, e = channel.RW.Read(data)
-			if r != 44 {
-				log.Panic("Invalid data length")
-			}
+			data, e := ReadAll(channel.RW, 36+NonceSize)
 			if e != nil {
 				log.Panic(e)
 			}
@@ -142,15 +150,13 @@ func (channel *SerialChannel) Close() {
 
 func SerialOpen(path string) (*SerialChannel, error) {
 	res, err := serial.Open(serial.OpenOptions{
-		PortName: path,
-		BaudRate: 115200,
-		DataBits: 8,
-		StopBits: 2,
-		// mode
+		PortName:              path,
+		BaudRate:              115200,
+		DataBits:              8,
+		StopBits:              2,
 		InterCharacterTimeout: 100,
 		MinimumReadSize:       0,
-
-		RTSCTSFlowControl: false,
+		RTSCTSFlowControl:     false,
 	})
 	if err != nil {
 		return nil, err
