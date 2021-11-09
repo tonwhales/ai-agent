@@ -1,4 +1,16 @@
+github.com/ShinyTrinkets/meta-logger v0.2.0 h1:oR533+wuhSJ+vLsnSq1CBSGQygNv8nDsvuRUVcOls0g=
+github.com/ShinyTrinkets/meta-logger v0.2.0/go.mod h1:cY1KnpPfpLIopR+arZXHYVrVGO6AETrhi3HmRGFjU+U=
+github.com/ShinyTrinkets/overseer v0.4.0 h1:NOr5I8GBCaE/qgBO0+nwy2X71VZRi5fXM3eiin6aivo=
+github.com/ShinyTrinkets/overseer v0.4.0/go.mod h1:cq8CvbZ3ioFmGrHokSAJalS0lC+pVXLKhITScItUGXY=
+github.com/azer/is-terminal v1.0.0/go.mod h1:5geuIpRQvdv6g/Q1MwXHbmNUlFLg8QcheGk4dZOmxQU=
+github.com/azer/logger v1.0.0/go.mod h1:iaDID7UeBTyUh31bjGFlLkr87k23z/mHMMLzt6YQQHU=
+github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/go-test/deep v1.0.1/go.mod h1:wGDj63lr65AM2AQyKZd/NYHGb0R+1RLqB8NKt3aSFNA=
 github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4 h1:G2ztCwXov8mRvP0ZfjE6nAlaCX2XbykaeHdbT6KwDz0=
 github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4/go.mod h1:2RvX5ZjVtsznNZPEt4xwJXNJrM3VTZoQf7V6gk0ysvs=
+github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
+github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 golang.org/x/sys v0.0.0-20211020064051-0ec99a608a1b h1:byBDhtWGQmWDrv1MlEv/BzGRMkw36h9QqsNnZQcDhRw=
 golang.org/x/sys v0.0.0-20211020064051-0ec99a608a1b/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=

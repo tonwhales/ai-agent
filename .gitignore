@@ -1,2 +1,5 @@
 ai-agent
 build
+supervisor/tmp
+supervisor/work
+supervisor/supervisor
