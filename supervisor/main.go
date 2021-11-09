@@ -196,6 +196,7 @@ func stopAgent() {
 	if resp.StatusCode != 200 {
 		panic("Unable to stop agent")
 	}
+	time.Sleep(5 * time.Second)
 	fmt.Println("Stopped agent")
 }
 
@@ -213,6 +214,7 @@ func startAgent() {
 	if resp.StatusCode != 200 {
 		panic("Unable to stop agent")
 	}
+	time.Sleep(5 * time.Second)
 	fmt.Println("Started agent")
 }
 

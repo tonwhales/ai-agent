@@ -5,4 +5,4 @@ cd /monad/imperium/software/
 
 echo "Starting..."
 cd /monad/imperium/software/work
-./ai-linux-arm --iterations 10000000 --timeout 10 --supervised
+./ai-linux-arm --iterations 10000000 --timeout 10 --supervised --port /dev/ttyO1
