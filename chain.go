@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"log"
 	"sync"
@@ -21,7 +22,7 @@ type SerialChannel struct {
 	callbacks map[uint32]chan []byte
 }
 
-func (channel *SerialChannel) PerformJob(data []byte, timeoutDuration int) []byte {
+func (channel *SerialChannel) PerformJob(data []byte, timeoutDuration int) ([]byte, error) {
 	queryId := channel.queryId
 	channel.queryId++
 
@@ -58,20 +59,17 @@ func (channel *SerialChannel) PerformJob(data []byte, timeoutDuration int) []byt
 	// Sending
 	n, err := channel.RW.Write(job)
 	if err != nil {
-		log.Panicln(err)
+		return nil, err
 	}
 	if n != len(job) {
-		log.Panicln("Invalid write")
+		return nil, errors.New("UART wirte issue")
 	}
-
-	// Log result
-	log.Printf("Sent job %d| %x\n", queryId, job)
 
 	r := <-ch
 	if len(r) == 0 {
-		log.Panicln("Invalid response")
+		return nil, errors.New("UART timed out")
 	}
-	return r
+	return r, nil
 }
 
 func ReadAll(reader io.Reader, size int) ([]byte, error) {
@@ -124,8 +122,8 @@ func (channel *SerialChannel) Start() {
 			body := data[4:]
 
 			// Print result
-			log.Printf("Received (RAW) %x %x\n", header, data)
-			log.Printf("Received (BODY) %d: %x\n", jobId, body)
+			// log.Printf("Received (RAW) %x %x\n", header, data)
+			// log.Printf("Received (BODY) %d: %x\n", jobId, body)
 
 			// Response
 			channel.mu.Lock()

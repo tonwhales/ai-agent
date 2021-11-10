@@ -14,8 +14,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
+
+	"github.com/go-cmd/cmd"
 
 	"github.com/jacobsa/go-serial/serial"
 )
@@ -111,6 +114,10 @@ func doReport(device string, key string, random []byte, seed []byte, value []byt
 	return nil
 }
 
+func delayRetry() {
+	time.Sleep(5 * time.Second)
+}
+
 func reportAsync(device string, key string, random []byte, seed []byte, value []byte) {
 	go (func() {
 		for {
@@ -118,7 +125,7 @@ func reportAsync(device string, key string, random []byte, seed []byte, value []
 			if err == nil {
 				return
 			}
-			time.Sleep(5 * time.Second)
+			delayRetry()
 		}
 	})()
 }
@@ -141,7 +148,7 @@ type JobResult struct {
 	Value  []byte
 }
 
-func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int) *JobResult {
+func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int, board int, doLogging bool) (*JobResult, error) {
 
 	// Hash prefix
 	prefix := data[:64]
@@ -156,7 +163,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 	dg.h[7] = init7
 	blockGeneric(dg, prefix)
 	dgst1 := getDigest(*dg)
-	log.Printf("H          : %x\n", dgst1)
+	log.Printf("[%2d] H          : %x\n", board, dgst1)
 
 	// Suffix
 	suffix := data[64:]
@@ -172,20 +179,27 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 	job = append(job, tmp...)
 
 	// Display job
-	log.Printf("Data       : %x\n", suffix)
-	log.Printf("Random     : %x\n", random)
-	log.Printf("Iterations : %d\n", iterations)
-	log.Printf("Job        : %x\n", job)
+	if doLogging {
+		log.Printf("[%2d] Data       : %x\n", board, suffix)
+		log.Printf("[%2d] Random     : %x\n", board, random)
+		log.Printf("[%2d] Iterations : %d\n", board, iterations)
+		log.Printf("[%2d] Job        : %x\n", board, job)
+	}
 
 	// Send to port if needed
 	if port != nil {
 		start := time.Now()
-		jobResponse := port.PerformJob(job, timeout)
+		jobResponse, err := port.PerformJob(job, timeout)
+		if err != nil {
+			return nil, err
+		}
 		if len(jobResponse) == 0 {
 			log.Printf("Unable to get response\n")
-			return nil
+			return nil, nil
 		} else {
-			log.Printf("Job completed in %v", time.Since(start))
+			if doLogging {
+				log.Printf("[%2d] Job completed in %v", board, time.Since(start))
+			}
 
 			// Prepare Data
 			hash := jobResponse[0:32]
@@ -205,15 +219,17 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 			localHash := sh.Sum(nil)
 
 			// Print results
-			log.Printf("RAW          : %x", jobResponse)
-			log.Printf("DATA         : %x", suffix)
-			log.Printf("PREPARED DATA: %x", xored)
-			log.Printf("RANDOM       : %x", nrandom)
-			log.Printf("FPGA NONCE   : %x", nonce)
-			log.Printf("FPGA HASH    : %x", hash)
-			log.Printf("LOCAL HASH   : %x", localHash)
+			if doLogging {
+				log.Printf("[%2d] RAW          : %x", board, jobResponse)
+				log.Printf("[%2d] DATA         : %x", board, suffix)
+				log.Printf("[%2d] PREPARED DATA: %x", board, xored)
+				log.Printf("[%2d] RANDOM       : %x", board, nrandom)
+				log.Printf("[%2d] FPGA NONCE   : %x", board, nonce)
+				log.Printf("[%2d] FPGA HASH    : %x", board, hash)
+				log.Printf("[%2d] LOCAL HASH   : %x", board, localHash)
+			}
 
-			return &JobResult{Random: nrandom, Value: localHash}
+			return &JobResult{Random: nrandom, Value: localHash}, nil
 		}
 	} else {
 
@@ -261,8 +277,50 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 		log.Printf("CPU NONCE  : %x", minNonce)
 		log.Printf("CPU HASH   : %x", min)
 
-		return &JobResult{Random: nrandom, Value: min}
+		return &JobResult{Random: nrandom, Value: min}, nil
 	}
+}
+
+func uploadBitstream() {
+	// Disable output buffering, enable streaming
+	cmdOptions := cmd.Options{
+		Buffered:  false,
+		Streaming: true,
+	}
+
+	// Create Cmd with options
+	envCmd := cmd.NewCmdOptions(cmdOptions, "/monad/imperium/software/utility", "upload", "/monad/imperium/software/work/ai.bit")
+	envCmd.Dir = "/monad/imperium/software/"
+
+	// Print STDOUT and STDERR lines streaming from Cmd
+	doneChan := make(chan struct{})
+	go func() {
+		defer close(doneChan)
+		// Done when both channels have been closed
+		// https://dave.cheney.net/2013/04/30/curious-channels
+		for envCmd.Stdout != nil || envCmd.Stderr != nil {
+			select {
+			case line, open := <-envCmd.Stdout:
+				if !open {
+					envCmd.Stdout = nil
+					continue
+				}
+				fmt.Println(line)
+			case line, open := <-envCmd.Stderr:
+				if !open {
+					envCmd.Stderr = nil
+					continue
+				}
+				fmt.Fprintln(os.Stderr, line)
+			}
+		}
+	}()
+
+	// Run and wait for Cmd to return, discard Status
+	<-envCmd.Start()
+
+	// Wait for goroutine to print everything
+	<-doneChan
 }
 
 func main() {
@@ -325,6 +383,79 @@ func main() {
 	// Check supervised flag
 	if supervised != nil && *supervised {
 		log.Println("Running in supervised mode")
+		ports := []string{
+			"/dev/ttyO1",
+			"/dev/ttyO2",
+			"/dev/ttyO5",
+		}
+
+		// Uploading
+		log.Println("Uploading bit stream...")
+		uploadBitstream()
+
+		// Loading config
+		log.Println("Loading initial config...")
+		lastestConfig := loadConfigRetry()
+
+		// Start config refetch loop
+		log.Println("Starting config refresh...")
+		go (func() {
+			for {
+				lastestConfig = loadConfigRetry()
+				time.Sleep(5 * time.Second)
+			}
+		})()
+
+		for index := range ports {
+			boardId := index
+			go (func() {
+				log.Printf("[%2d] Connecting to board\n", boardId)
+				port, err = SerialOpen(ports[boardId])
+				if err != nil {
+					log.Panicln(err)
+				}
+				port.Start()
+
+				log.Printf("[%2d] Starting threads\n", boardId)
+				var latestQuery uint32 = 0
+				go (func() {
+					for {
+						config := lastestConfig
+						queryId := atomic.AddUint32(&latestQuery, 1)
+						log.Printf("[%2d] Attempt    : %d\n", boardId, queryId)
+
+						// Create random
+						random := make([]byte, 32)
+						rand.Read(random)
+
+						// Create block
+						data := make([]byte, 0)
+						data = append(data, config.Header...)
+						data = append(data, random...)
+						data = append(data, config.Seed...)
+						data = append(data, random...)
+
+						// Do Job
+						result, err := performJob(port, data, uint32(*iterations), *timeout, boardId, false)
+						if err != nil {
+							log.Printf("[%2d] %v\n", boardId, err)
+							delayRetry()
+							continue
+						}
+
+						// Process
+						if result == nil {
+							log.Printf("Unable to get results")
+						} else {
+							reportAsync(*deviceName, config.Key, result.Random, config.Seed, result.Value)
+						}
+					}
+				})()
+			})()
+		}
+
+		// Infinite loop
+		select {}
 	}
 
 	// Port
@@ -367,7 +498,10 @@ func main() {
 				log.Printf("Attempt    : %d\n", queryId)
 
 				// Do Job
-				result := performJob(port, data, uint32(*iterations), *timeout)
+				result, err := performJob(port, data, uint32(*iterations), *timeout, 0, true)
+				if err != nil {
+					log.Panicln(err)
+				}
 				if result == nil {
 					log.Printf("Unable to get results")
 				}
@@ -409,7 +543,10 @@ func main() {
 				data = append(data, random...)
 
 				// Do Job
-				result := performJob(port, data, uint32(*iterations), *timeout)
+				result, err := performJob(port, data, uint32(*iterations), *timeout, 0, true)
+				if err != nil {
+					log.Panicln(err)
+				}
 
 				// Process
 				if result == nil {
