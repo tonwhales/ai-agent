@@ -163,7 +163,9 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 	dg.h[7] = init7
 	blockGeneric(dg, prefix)
 	dgst1 := getDigest(*dg)
-	log.Printf("[%2d] H          : %x\n", board, dgst1)
+	if doLogging {
+		log.Printf("[%2d] H          : %x\n", board, dgst1)
+	}
 
 	// Suffix
 	suffix := data[64:]
