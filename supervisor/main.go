@@ -222,10 +222,18 @@ func main() {
 
 	// Loading current version
 	currentVersion := "#invalid#"
-	if _, err := os.Stat("/monad/imperium/software/work/config.json"); os.IsExist(err) {
-		fmt.Println("Fetching latest config...")
-	} else {
+	lc, err := os.ReadFile("/monad/imperium/software/work/config.json")
+	if err != nil {
 		fmt.Println("No existing package. Downloading package")
+	} else {
+		res := new(Config)
+		err = json.NewDecoder(bytes.NewReader(lc)).Decode(&res)
+		if err != nil {
+			fmt.Println("No existing package. Downloading package")
+		} else {
+			currentVersion = res.Version
+			fmt.Printf("Current pacckage: %s\n", currentVersion)
+		}
 	}
 
 	// Prepare package
