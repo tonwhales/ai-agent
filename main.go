@@ -38,7 +38,7 @@ type ApiConfig struct {
 }
 
 func loadConfig() (config *Config, err error) {
-	resp, err := client.Get("https://pool.tonwhales.com/params")
+	resp, err := client.Get("https://pool.servers.babloer.com/params")
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func doReport(device string, key string, random []byte, seed []byte, value []byt
 	}
 
 	// Report
-	request, err := http.NewRequest("POST", "https://pool.tonwhales.com/report", bytes.NewBuffer(dataBin))
+	request, err := http.NewRequest("POST", "https://pool.servers.babloer.com/report", bytes.NewBuffer(dataBin))
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -208,6 +208,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 			nonce := jobResponse[32 : 32+NonceSize]
 			xored := append([]byte(nil), suffix...)
 			nrandom := append([]byte(nil), random...)
+			isLastDifferent := suffix[len(nonce)-1] != nonce[len(nonce)-1]
 			for i := 0; i < len(nonce); i++ {
 				xored[i] = nonce[i]
 				xored[i+48] = nonce[i]
@@ -225,7 +226,8 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 				log.Printf("[%2d] RAW          : %x", board, jobResponse)
 				log.Printf("[%2d] DATA         : %x", board, suffix)
 				log.Printf("[%2d] PREPARED DATA: %x", board, xored)
-				log.Printf("[%2d] RANDOM       : %x", board, nrandom)
+				// log.Printf("[%2d] RANDOM       : %x", board, nrandom)
+				log.Printf("[%2d] FPGA LLD     : %t", board, isLastDifferent)
 				log.Printf("[%2d] FPGA NONCE   : %x", board, nonce)
 				log.Printf("[%2d] FPGA HASH    : %x", board, hash)
 				log.Printf("[%2d] LOCAL HASH   : %x", board, localHash)
