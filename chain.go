@@ -12,8 +12,6 @@ import (
 	"github.com/jacobsa/go-serial/serial"
 )
 
-const NonceSize = 8
-
 type SerialChannel struct {
 	queryId   uint32
 	Closed    bool

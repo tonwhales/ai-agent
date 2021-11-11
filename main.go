@@ -13,8 +13,10 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -22,6 +24,13 @@ import (
 
 	"github.com/jacobsa/go-serial/serial"
 )
+
+//
+// Parameters
+//
+
+const NonceSize = 8
+const IterationsMultiplier = 1 * 3 // 3 cores and single chip
 
 type Config struct {
 	Key    string
@@ -327,6 +336,22 @@ func uploadBitstream() {
 	<-doneChan
 }
 
+func GetLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, address := range addrs {
+		// check the address type and if it is not a loopback the display it
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return ""
+}
+
 func main() {
 
 	var port *SerialChannel = nil
@@ -339,8 +364,15 @@ func main() {
 	timeout := flag.Int("timeout", 5, "job timeout")
 	deviceName := flag.String("name", "dev", "Device name")
 	test := flag.Bool("test", false, "Use test serial debug")
+	env := flag.String("dc", "dev", "DC ID")
 	supervised := flag.Bool("supervised", false, "Supervised invironment")
 	flag.Parse()
+
+	// Resolve ID
+	ip := GetLocalIP()
+	parts := strings.Split(ip, ".")
+	id := *env + "-" + strings.Join(parts, "-")
+	log.Printf("Started device " + id)
 
 	// Test
 	if test != nil && *test {
