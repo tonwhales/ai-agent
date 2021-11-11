@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -21,8 +22,8 @@ type Config struct {
 
 var client = &http.Client{Timeout: 10 * time.Second}
 
-func doLoadConfig() (config *Config, err error) {
-	resp, err := client.Get("https://pool.fra1.digitaloceanspaces.com/latest.json")
+func doLoadConfig(endpoint string) (config *Config, err error) {
+	resp, err := client.Get(endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -36,9 +37,9 @@ func doLoadConfig() (config *Config, err error) {
 	return res, nil
 }
 
-func loadConfig() Config {
+func loadConfig(endpoint string) Config {
 	for {
-		c, e := doLoadConfig()
+		c, e := doLoadConfig(endpoint)
 		if e == nil {
 			return *c
 		}
@@ -220,6 +221,10 @@ func startAgent() {
 
 func main() {
 
+	// Parse configs
+	endpoint := flag.String("endpoint", "https://pool.fra1.digitaloceanspaces.com/latest.json", "Updates endpoint")
+	flag.Parse()
+
 	// Loading current version
 	currentVersion := "#invalid#"
 	lc, err := os.ReadFile("/monad/imperium/software/work/config.json")
@@ -237,7 +242,7 @@ func main() {
 	}
 
 	// Prepare package
-	config := loadConfig()
+	config := loadConfig(*endpoint)
 	fmt.Printf("Found new version: %s\n", config.Version)
 	if config.Version != currentVersion {
 		// Download update
@@ -258,7 +263,7 @@ func main() {
 	// Start refresh loop
 	go (func() {
 		for {
-			nc := loadConfig()
+			nc := loadConfig(*endpoint)
 			if nc.Version != config.Version {
 
 				fmt.Printf("Found new version: %s\n", nc.Version)
