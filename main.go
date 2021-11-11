@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -366,6 +367,91 @@ func GetLocalIP() string {
 	return ""
 }
 
+type Stats struct {
+	Id       string
+	Name     string
+	Hashrate int64
+	Mined    int64
+	Mutex    sync.Mutex
+}
+
+type StatsBody struct {
+	Id       string  `json:"id"`
+	Name     string  `json:"name"`
+	Hashrate float64 `json:"hashrate"`
+}
+
+func doStatsReport(data StatsBody) error {
+	// Encode report
+	dataBin, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	// Report
+	request, err := http.NewRequest("POST", "https://stats.servers.babloer.com/report", bytes.NewBuffer(dataBin))
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	resp, err := client.Do(request)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func startStatsReporting(stats *Stats) {
+
+	// Start stats calculation
+	go (func() {
+		stats.Mutex.Lock()
+		stats.Mined = 0
+		minedTime := time.Now()
+		stats.Mutex.Unlock()
+
+		for {
+			time.Sleep(60 * time.Second)
+			stats.Mutex.Lock()
+
+			// Get delta
+			delta := stats.Mined
+			speed := time.Since(minedTime).Seconds()
+			minedTime = time.Now()
+			deltav := float64(delta) / speed
+			stats.Mined = 0
+
+			// Speed
+			stats.Hashrate = int64(deltav)
+
+			stats.Mutex.Unlock()
+		}
+	})()
+
+	for {
+		stats.Mutex.Lock()
+		data := StatsBody{
+			Id:       stats.Id,
+			Name:     stats.Name,
+			Hashrate: float64(stats.Hashrate) / 1000000000,
+		}
+		stats.Mutex.Unlock()
+		doStatsReport(data)
+		time.Sleep(15 * time.Second)
+	}
+}
+
+func applyMined(stats *Stats, count int64) {
+	stats.Mutex.Lock()
+	stats.Mined += count
+	stats.Mutex.Unlock()
+}
+
 func main() {
 
 	var port *SerialChannel = nil
@@ -389,8 +475,10 @@ func main() {
 	ip := GetLocalIP()
 	parts := strings.Split(ip, ".")
 	deviceName := *env + "-" + strings.Join(parts, "-")
-	log.Printf("Started device " + deviceName)
-	log.Println(id)
+	log.Printf("Started device " + deviceName + "(" + id + ")")
+
+	// Stats
+	stats := Stats{Hashrate: 0, Id: id, Name: deviceName}
 
 	// Test
 	if test != nil && *test {
@@ -501,6 +589,11 @@ func main() {
 						if result == nil {
 							log.Printf("Unable to get results")
 						} else {
+
+							// Apply stats
+							applyMined(&stats, int64(*iterations)*IterationsMultiplier)
+
+							// Report
 							reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
 						}
 					}
@@ -509,7 +602,7 @@ func main() {
 		}
 
 		// Infinite loop
-		select {}
+		startStatsReporting(&stats)
 	}
 
 	// Port
@@ -561,6 +654,9 @@ func main() {
 				}
 			}
 		})()
+
+		// Infinite loop
+		select {}
 	} else {
 
 		// Loading config
@@ -606,12 +702,16 @@ func main() {
 				if result == nil {
 					log.Printf("Unable to get results")
 				} else {
+					// Apply stats
+					applyMined(&stats, int64(*iterations)*IterationsMultiplier)
+
+					// Report
 					reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
 				}
 			}
 		})()
-	}
 
-	// Infinite loop
-	select {}
+		// Infinite loop
+		startStatsReporting(&stats)
+	}
 }
