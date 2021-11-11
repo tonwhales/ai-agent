@@ -3,7 +3,7 @@ killall -9 miner
 set -e
 echo Uploading...
 cd /monad/imperium/software
-./utility upload /sdcard/ai/ai.bit
+./utility upload /monad/ai/ai.bit
 ./utility reset
-cd /sdcard/ai/
-./ai-linux-arm --port /dev/ttyO1 --iterations 800000000 --timeout 60
+cd /monad/ai/
+./ai-linux-arm --port /dev/ttyO1 --iterations 800000000 --timeout 60 --dc test

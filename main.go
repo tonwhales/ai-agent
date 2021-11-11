@@ -336,6 +336,20 @@ func uploadBitstream() {
 	<-doneChan
 }
 
+func getMacAddr() string {
+	ifas, err := net.Interfaces()
+	if err != nil {
+		return "unknown"
+	}
+	for _, ifa := range ifas {
+		a := ifa.HardwareAddr.String()
+		if a != "" {
+			return a
+		}
+	}
+	return "unknown"
+}
+
 func GetLocalIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -362,17 +376,21 @@ func main() {
 	iterations := flag.Int("iterations", 1000000, "iterations count")
 	config := flag.String("config", "", "Custom config")
 	timeout := flag.Int("timeout", 5, "job timeout")
-	deviceName := flag.String("name", "dev", "Device name")
 	test := flag.Bool("test", false, "Use test serial debug")
 	env := flag.String("dc", "dev", "DC ID")
 	supervised := flag.Bool("supervised", false, "Supervised invironment")
 	flag.Parse()
 
-	// Resolve ID
+	// Resolve Device ID and Name
+	id := getMacAddr()
+	if err != nil {
+		panic(err)
+	}
 	ip := GetLocalIP()
 	parts := strings.Split(ip, ".")
-	id := *env + "-" + strings.Join(parts, "-")
-	log.Printf("Started device " + id)
+	deviceName := *env + "-" + strings.Join(parts, "-")
+	log.Printf("Started device " + deviceName)
+	log.Println(id)
 
 	// Test
 	if test != nil && *test {
@@ -483,7 +501,7 @@ func main() {
 						if result == nil {
 							log.Printf("Unable to get results")
 						} else {
-							reportAsync(*deviceName, config.Key, result.Random, config.Seed, result.Value)
+							reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
 						}
 					}
 				})()
@@ -588,7 +606,7 @@ func main() {
 				if result == nil {
 					log.Printf("Unable to get results")
 				} else {
-					reportAsync(*deviceName, config.Key, result.Random, config.Seed, result.Value)
+					reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
 				}
 			}
 		})()
