@@ -12,6 +12,8 @@ import (
 	"github.com/jacobsa/go-serial/serial"
 )
 
+const ID = 6
+
 type SerialChannel struct {
 	queryId   uint32
 	Closed    bool
@@ -25,7 +27,7 @@ func (channel *SerialChannel) PerformJob(data []byte, timeoutDuration int) ([]by
 	channel.queryId++
 
 	// Package
-	job := []byte{0xa4, 0x61, 0xa1, 0x8c}
+	job := []byte{0xa4, 0x61, 0xa1, ID}
 	tmp := make([]byte, 4)
 	binary.BigEndian.PutUint32(tmp, queryId)
 	job = append(job, tmp...)
@@ -87,6 +89,7 @@ func ReadAll(reader io.Reader, size int) ([]byte, error) {
 			continue
 		}
 		buffer.WriteByte(bt[0])
+		log.Printf("%x\n", bt[0])
 		read++
 		if read >= size {
 			break
@@ -105,7 +108,7 @@ func (channel *SerialChannel) Start() {
 			if e != nil {
 				log.Panic(e)
 			}
-			if header[0] != 0x42 || header[1] != 0x94 || header[2] != 0x37 || header[3] != 0x9b {
+			if header[0] != 0x42 || header[1] != 0x94 || header[2] != 0x37 || header[3] != (0x9b+ID) {
 				log.Panicf("Invalid header %x", header)
 			}
 

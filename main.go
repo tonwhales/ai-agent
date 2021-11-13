@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -24,6 +23,8 @@ import (
 	"github.com/go-cmd/cmd"
 
 	"github.com/jacobsa/go-serial/serial"
+
+	"github.com/sigurn/crc16"
 )
 
 //
@@ -452,6 +453,69 @@ func applyMined(stats *Stats, count int64) {
 	stats.Mutex.Unlock()
 }
 
+const (
+	STX byte = 0x02
+	ETX byte = 0x03
+	ESC byte = 0x1B
+)
+
+func Escape(data []byte) []byte {
+	var buf bytes.Buffer
+	for _, b := range data {
+		switch b {
+		case STX:
+			fallthrough
+		case ESC:
+			fallthrough
+		case ETX:
+			buf.WriteByte(ESC)
+			fallthrough
+		default:
+			buf.WriteByte(b)
+		}
+	}
+	return buf.Bytes()
+}
+
+func calcChecksum(data []byte) []byte {
+	arr := make([]byte, 2)
+	table := crc16.MakeTable(crc16.CRC16_ARC)
+	checksum := crc16.Checksum(data, table)
+	binary.BigEndian.PutUint16(arr, checksum)
+	return arr
+}
+
+type PacketHeader struct {
+	Version uint8
+	Type    uint8
+	ID      uint8
+	Length  uint16
+}
+
+func Pack(id uint8, requestType uint8, data []byte) []byte {
+
+	// Frame
+	header := PacketHeader{
+		Version: 0,
+		Type:    requestType,
+		ID:      id,
+		Length:  uint16(len(data)),
+	}
+	var payload bytes.Buffer
+	binary.Write(&payload, binary.BigEndian, &header)
+	payload.Write(data)
+	payload.Write(calcChecksum(payload.Bytes()))
+	body := payload.Bytes()
+	body = Escape(body)
+
+	// Transfer package
+	var res bytes.Buffer
+	res.WriteByte(STX)
+	res.Write(body)
+	res.WriteByte(ETX)
+	return res.Bytes()
+}
+
 func main() {
 
 	var port *SerialChannel = nil
@@ -503,23 +567,42 @@ func main() {
 			log.Panicln(err)
 		}
 
-		bt := make([]byte, 1)
+		// Write data
+		log.Println("Wait...")
+		on := false
 		for {
-			log.Println("Reading...")
-			r, err := pp.Read(bt)
+			time.Sleep(1 * time.Second)
+			data, err := hex.DecodeString("00")
 			if err != nil {
-				switch err {
-				case io.EOF:
-					continue
-				default:
-					log.Panic(err)
-				}
+				log.Panicln(err)
 			}
-			if r != 1 {
-				log.Panic("Empty")
+			if on {
+				data = Pack(7, 0xA1, data)
+			} else {
+				data = Pack(7, 0xA0, data)
 			}
-			log.Printf("%x", bt)
+			on = !on
+			pp.Write(data)
+			log.Printf("Written %x\n", data)
 		}
+
+		// bt := make([]byte, 1)
+		// for {
+		// 	log.Println("Reading...")
+		// 	r, err := pp.Read(bt)
+		// 	if err != nil {
+		// 		switch err {
+		// 		case io.EOF:
+		// 			continue
+		// 		default:
+		// 			log.Panic(err)
+		// 		}
+		// 	}
+		// 	if r != 1 {
+		// 		log.Panic("Empty")
+		// 	}
+		// 	log.Printf("%x", bt)
+		// }
 	}
 
 	// Check supervised flag

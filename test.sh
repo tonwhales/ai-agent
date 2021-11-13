@@ -4,8 +4,10 @@ set +e
 ssh -i ../keys/id_rsa_openssh root@192.168.16.120 "killall -9 ai-linux-arm"
 ssh -i ../keys/id_rsa_openssh root@192.168.16.120 "rm -fr /monad/ai/*"
 ssh -i ../keys/id_rsa_openssh root@192.168.16.120 "mkdir -p /monad/ai/"
+ssh -i ../keys/id_rsa_openssh root@192.168.16.120 "mkdir -p /monad/led_ctrl/"
 set -e
 scp -i ../keys/id_rsa_openssh ./build/ai-linux-arm root@192.168.16.120:/monad/ai/ai-linux-arm
-scp -i ../keys/id_rsa_openssh ./bits/i10.bit root@192.168.16.120:/monad/ai/ai.bit
+scp -i ../keys/id_rsa_openssh ./bits/amoveo_k7355_chaining_batched_8cores_380mhz.bit root@192.168.16.120:/monad/led_ctrl/R2.bit
+scp -i ../keys/id_rsa_openssh ./bits/test3.bit root@192.168.16.120:/monad/ai/ai.bit
 scp -i ../keys/id_rsa_openssh ./test_launch.sh root@192.168.16.120:/monad/ai/test_launch.sh
 ssh -i ../keys/id_rsa_openssh root@192.168.16.120 "sh /monad/ai/test_launch.sh"
