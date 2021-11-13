@@ -549,8 +549,10 @@ func main() {
 		})()
 
 		// Config
-		iteractionsCount := 800000000
-		timeoutValue := 60
+		defaultIterations := 800000000
+		defaultTimeout := 60
+		iterations := &defaultIterations
+		timeout := &defaultTimeout
 
 		for index := range ports {
 			boardId := index
@@ -582,7 +584,7 @@ func main() {
 						data = append(data, random...)
 
 						// Do Job
-						result, err := performJob(port, data, uint32(iteractionsCount), timeoutValue, boardId, false)
+						result, err := performJob(port, data, uint32(*iterations), *timeout, boardId, false)
 						if err != nil {
 							log.Printf("[%2d] %v\n", boardId, err)
 							delayRetry()
