@@ -21,10 +21,6 @@ import (
 	"time"
 
 	"github.com/go-cmd/cmd"
-
-	"github.com/jacobsa/go-serial/serial"
-
-	"github.com/sigurn/crc16"
 )
 
 //
@@ -159,7 +155,7 @@ type JobResult struct {
 	Value  []byte
 }
 
-func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int, board int, doLogging bool) (*JobResult, error) {
+func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int, board int, chip int, doLogging bool) (*JobResult, error) {
 
 	// Hash prefix
 	prefix := data[:64]
@@ -202,7 +198,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 	// Send to port if needed
 	if port != nil {
 		start := time.Now()
-		jobResponse, err := port.PerformJob(job, timeout)
+		jobResponse, err := port.PerformJob(chip, job, timeout)
 		if err != nil {
 			return nil, err
 		}
@@ -453,69 +449,6 @@ func applyMined(stats *Stats, count int64) {
 	stats.Mutex.Unlock()
 }
 
-const (
-	STX byte = 0x02
-	ETX byte = 0x03
-	ESC byte = 0x1B
-)
-
-func Escape(data []byte) []byte {
-	var buf bytes.Buffer
-	for _, b := range data {
-		switch b {
-		case STX:
-			fallthrough
-		case ESC:
-			fallthrough
-		case ETX:
-			buf.WriteByte(ESC)
-			fallthrough
-		default:
-			buf.WriteByte(b)
-		}
-	}
-	return buf.Bytes()
-}
-
-func calcChecksum(data []byte) []byte {
-	arr := make([]byte, 2)
-	table := crc16.MakeTable(crc16.CRC16_ARC)
-	checksum := crc16.Checksum(data, table)
-	binary.BigEndian.PutUint16(arr, checksum)
-	return arr
-}
-
-type PacketHeader struct {
-	Version uint8
-	Type    uint8
-	ID      uint8
-	Length  uint16
-}
-
-func Pack(id uint8, requestType uint8, data []byte) []byte {
-
-	// Frame
-	header := PacketHeader{
-		Version: 0,
-		Type:    requestType,
-		ID:      id,
-		Length:  uint16(len(data)),
-	}
-	var payload bytes.Buffer
-	binary.Write(&payload, binary.BigEndian, &header)
-	payload.Write(data)
-	payload.Write(calcChecksum(payload.Bytes()))
-	body := payload.Bytes()
-	body = Escape(body)
-
-	// Transfer package
-	var res bytes.Buffer
-	res.WriteByte(STX)
-	res.Write(body)
-	res.WriteByte(ETX)
-	return res.Bytes()
-}
-
 func main() {
 
 	var port *SerialChannel = nil
@@ -529,6 +462,7 @@ func main() {
 	test := flag.Bool("test", false, "Use test serial debug")
 	env := flag.String("dc", "dev", "DC ID")
 	supervised := flag.Bool("supervised", false, "Supervised invironment")
+	chip := flag.Int("chipd", 6, "Working Chip ID")
 	flag.Parse()
 
 	// Resolve Device ID and Name
@@ -551,18 +485,7 @@ func main() {
 		}
 
 		log.Println("Connecting to COM port...")
-		pp, err := serial.Open(serial.OpenOptions{
-			PortName: *portName,
-			BaudRate: 115200,
-			DataBits: 8,
-			StopBits: 2,
-
-			// mode
-			InterCharacterTimeout: 100,
-			MinimumReadSize:       0,
-
-			RTSCTSFlowControl: false,
-		})
+		pp, err := SerialOpen(*portName)
 		if err != nil {
 			log.Panicln(err)
 		}
@@ -572,18 +495,27 @@ func main() {
 		on := false
 		for {
 			time.Sleep(1 * time.Second)
-			data, err := hex.DecodeString("00")
+			if on {
+				data, err := hex.DecodeString("00")
+				if err != nil {
+					log.Panicln(err)
+				}
+				pp.Write(*chip, data)
+				log.Printf("Written %x\n", data)
+			} else {
+				data, err := hex.DecodeString("01")
+				if err != nil {
+					log.Panicln(err)
+				}
+				pp.Write(*chip, data)
+				log.Printf("Written %x\n", data)
+			}
+			rr, err := pp.Read()
 			if err != nil {
 				log.Panicln(err)
 			}
-			if on {
-				data = Pack(7, 0xA1, data)
-			} else {
-				data = Pack(7, 0xA0, data)
-			}
+			log.Printf("Read %x from %d\n", rr.Data, rr.ChipID)
 			on = !on
-			pp.Write(data)
-			log.Printf("Written %x\n", data)
 		}
 
 		// bt := make([]byte, 1)
@@ -639,7 +571,6 @@ func main() {
 				if err != nil {
 					log.Panicln(err)
 				}
-				port.Start()
 
 				log.Printf("[%2d] Starting threads\n", boardId)
 				var latestQuery uint32 = 0
@@ -661,7 +592,7 @@ func main() {
 						data = append(data, random...)
 
 						// Do Job
-						result, err := performJob(port, data, uint32(*iterations), *timeout, boardId, false)
+						result, err := performJob(port, data, uint32(*iterations), *timeout, boardId, *chip, false)
 						if err != nil {
 							log.Printf("[%2d] %v\n", boardId, err)
 							delayRetry()
@@ -695,7 +626,6 @@ func main() {
 		if err != nil {
 			log.Panicln(err)
 		}
-		port.Start()
 	} else {
 		log.Println("Running without COM port")
 	}
@@ -728,7 +658,7 @@ func main() {
 				log.Printf("Attempt    : %d\n", queryId)
 
 				// Do Job
-				result, err := performJob(port, data, uint32(*iterations), *timeout, 0, true)
+				result, err := performJob(port, data, uint32(*iterations), *timeout, 0, *chip, true)
 				if err != nil {
 					log.Panicln(err)
 				}
@@ -776,7 +706,7 @@ func main() {
 				data = append(data, random...)
 
 				// Do Job
-				result, err := performJob(port, data, uint32(*iterations), *timeout, 0, true)
+				result, err := performJob(port, data, uint32(*iterations), *timeout, 0, *chip, true)
 				if err != nil {
 					log.Panicln(err)
 				}
