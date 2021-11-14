@@ -601,7 +601,7 @@ func main() {
 						applyMined(&stats, total)
 
 						// Check if not enough zeros
-						for i := 0; i < 9; i++ {
+						for i := 0; i < 5; i++ {
 							if result.Value[i] != 0 {
 								continue outer
 							}
