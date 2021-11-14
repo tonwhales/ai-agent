@@ -599,7 +599,14 @@ func main() {
 						// Apply stats
 						applyMined(&stats, total)
 
-						// Report
+						// Check if not enough zeros
+						for i := 0; i < 9; i++ {
+							if result.Value[i] != 0 {
+								continue
+							}
+						}
+
+						// Report if ok
 						reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
 					}
 				}
