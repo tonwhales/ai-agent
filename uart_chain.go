@@ -59,12 +59,12 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 		}
 
 		// Job not ready
-		if jobState == 0 {
+		if jobState == 1 {
 			continue
 		}
 
 		// Job ready
-		if jobState == 1 {
+		if jobState == 2 {
 			return data, nil
 		}
 
