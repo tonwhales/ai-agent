@@ -565,6 +565,7 @@ func main() {
 				port.Start()
 
 				var latestQuery uint32 = 0
+			outer:
 				for {
 					config := lastestConfig
 					queryId := atomic.AddUint32(&latestQuery, 1)
@@ -602,7 +603,7 @@ func main() {
 						// Check if not enough zeros
 						for i := 0; i < 9; i++ {
 							if result.Value[i] != 0 {
-								continue
+								continue outer
 							}
 						}
 
