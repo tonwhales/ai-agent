@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/jacobsa/go-serial/serial"
 	"github.com/sigurn/crc16"
@@ -23,6 +24,112 @@ type SerialChannel struct {
 type SerialFrame struct {
 	ChipID uint8
 	Data   []byte
+}
+
+func SerialOpen(path string) (*SerialChannel, error) {
+	res, err := serial.Open(serial.OpenOptions{
+		PortName:              path,
+		BaudRate:              115200,
+		DataBits:              8,
+		StopBits:              2,
+		InterCharacterTimeout: 100,
+		MinimumReadSize:       0,
+		RTSCTSFlowControl:     false,
+	})
+	if err != nil {
+		return nil, err
+	} else {
+		return &SerialChannel{RW: res, Closed: false, queryId: 0, callbacks: make(map[uint32]chan []byte)}, nil
+	}
+}
+
+func (channel *SerialChannel) Write(chipId int, data []byte) error {
+	channel.writeLock.Lock()
+	defer channel.writeLock.Unlock()
+	return channel.doWrite(chipId, data)
+}
+
+func (channel *SerialChannel) Read() (*SerialFrame, error) {
+	timer := time.NewTimer(1000 * time.Millisecond)
+	doneError := make(chan error, 1)
+	doneFrame := make(chan *SerialFrame, 1)
+	go func() {
+		channel.readLock.Lock()
+		defer channel.readLock.Unlock()
+		r, err := channel.doRead()
+		if err != nil {
+			doneError <- err
+		} else {
+			doneFrame <- r
+		}
+	}()
+	select {
+	case err := <-doneError:
+		return nil, err
+	case p := <-doneFrame:
+		return p, nil
+	case <-timer.C:
+		return nil, errors.New("Request timeout")
+	}
+}
+
+func (channel *SerialChannel) Request(chipId int, data []byte) (*SerialFrame, error) {
+	channel.Write(chipId, data)
+	return channel.Read()
+}
+
+func (channel *SerialChannel) Close() {
+
+	// Write lock
+	channel.writeLock.Lock()
+	defer channel.writeLock.Unlock()
+
+	// Closing
+	channel.Closed = true
+	channel.RW.Close()
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//  Implementation
+//////////////////////////////////////////////////////////////////////////////////////////
+
+func (channel *SerialChannel) doWrite(chipId int, data []byte) error {
+	packed := pack(uint8(chipId), 0x0, data)
+	n, err := channel.RW.Write(packed)
+	if err != nil {
+		return err
+	}
+	if n != len(packed) {
+		return errors.New("UART wirte issue")
+	}
+	return nil
+}
+
+func (channel *SerialChannel) doRead() (*SerialFrame, error) {
+	var buffer bytes.Buffer
+	b := make([]byte, 1)
+	for {
+		if _, err := channel.RW.Read(b); err != nil {
+			return nil, err
+		}
+		switch b[0] {
+		case STX:
+			buffer.Reset()
+		case ETX:
+			frm, err := unserialize(buffer.Bytes())
+			if err != nil {
+				return nil, err
+			}
+			return frm, nil
+		case ESC:
+			if _, err := channel.RW.Read(b); err != nil {
+				return nil, err
+			}
+			fallthrough
+		default:
+			buffer.WriteByte(b[0])
+		}
+	}
 }
 
 const (
@@ -90,41 +197,6 @@ func pack(id uint8, requestType uint8, data []byte) []byte {
 	return res.Bytes()
 }
 
-func SerialOpen(path string) (*SerialChannel, error) {
-	res, err := serial.Open(serial.OpenOptions{
-		PortName:              path,
-		BaudRate:              115200,
-		DataBits:              8,
-		StopBits:              2,
-		InterCharacterTimeout: 100,
-		MinimumReadSize:       0,
-		RTSCTSFlowControl:     false,
-	})
-	if err != nil {
-		return nil, err
-	} else {
-		return &SerialChannel{RW: res, Closed: false, queryId: 0, callbacks: make(map[uint32]chan []byte)}, nil
-	}
-}
-
-func (channel *SerialChannel) Write(chipId int, data []byte) error {
-
-	// Write lock
-	channel.writeLock.Lock()
-	defer channel.writeLock.Unlock()
-
-	// Write cycle
-	packed := pack(uint8(chipId), 0x0, data)
-	n, err := channel.RW.Write(packed)
-	if err != nil {
-		return err
-	}
-	if n != len(packed) {
-		return errors.New("UART wirte issue")
-	}
-	return nil
-}
-
 func parsePacket(p []byte) (*SerialFrame, error) {
 	// check length
 	if len(p) < PacketHeaderLength {
@@ -169,48 +241,4 @@ func popCRC(p []byte) ([]byte, error) {
 		return nil, errors.New("invalid packet")
 	}
 	return payload, nil
-}
-
-func (channel *SerialChannel) Read() (*SerialFrame, error) {
-
-	// Read lock
-	channel.readLock.Lock()
-	defer channel.readLock.Unlock()
-
-	// Read cycle
-	var buffer bytes.Buffer
-	b := make([]byte, 1)
-	for {
-		if _, err := channel.RW.Read(b); err != nil {
-			return nil, err
-		}
-		switch b[0] {
-		case STX:
-			buffer.Reset()
-		case ETX:
-			frm, err := unserialize(buffer.Bytes())
-			if err != nil {
-				return nil, err
-			}
-			return frm, nil
-		case ESC:
-			if _, err := channel.RW.Read(b); err != nil {
-				return nil, err
-			}
-			fallthrough
-		default:
-			buffer.WriteByte(b[0])
-		}
-	}
-}
-
-func (channel *SerialChannel) Close() {
-
-	// Write lock
-	channel.writeLock.Lock()
-	defer channel.writeLock.Unlock()
-
-	// Closing
-	channel.Closed = true
-	channel.RW.Close()
 }
