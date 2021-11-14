@@ -490,6 +490,17 @@ func main() {
 			log.Panicln(err)
 		}
 
+		// Read cycle
+		go (func() {
+			for {
+				frame, err := pp.Read()
+				if err != nil {
+					log.Panicln(err)
+				}
+				log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+			}
+		})()
+
 		// Write data
 		log.Println("Wait...")
 		on := false
