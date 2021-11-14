@@ -176,6 +176,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 	if doLogging {
 		log.Printf("[%2d] H          : %x\n", board, dgst1)
 	}
+	// log.Printf("[%2d] job\n", board)
 
 	// Suffix
 	suffix := data[64:]
@@ -454,7 +455,6 @@ func applyMined(stats *Stats, count int64) {
 
 func main() {
 
-	var port *SerialChannel = nil
 	var err error
 
 	// Arguments
@@ -557,8 +557,8 @@ func main() {
 		for index := range ports {
 			boardId := index
 			go (func() {
-				log.Printf("[%2d] Connecting to board\n", boardId)
-				port, err = SerialOpen(ports[boardId])
+				log.Printf("[%2d] Connecting to board %v\n", boardId, ports[boardId])
+				port, err := SerialOpen(ports[boardId])
 				if err != nil {
 					log.Panicln(err)
 				}
@@ -594,7 +594,7 @@ func main() {
 						log.Printf("Unable to get results")
 					} else {
 						total := int64(*iterations) * IterationsMultiplier
-						log.Printf("[%2d] Mined %f GH\n", boardId, float64(total)/1000000000)
+						// log.Printf("[%2d] Mined %f GH\n", boardId, float64(total)/1000000000)
 
 						// Apply stats
 						applyMined(&stats, total)
@@ -611,6 +611,7 @@ func main() {
 	}
 
 	// Port
+	var port *SerialChannel = nil
 	if portName != nil && *portName != "" {
 		log.Println("Connecting to COM port...")
 		port, err = SerialOpen(*portName)

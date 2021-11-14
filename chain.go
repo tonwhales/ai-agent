@@ -13,6 +13,7 @@ import (
 )
 
 type SerialChannel struct {
+	Tag       string
 	queryId   uint32
 	Closed    bool
 	RW        io.ReadWriteCloser
@@ -55,6 +56,7 @@ func (channel *SerialChannel) PerformJob(data []byte, timeoutDuration int) ([]by
 	})()
 
 	// Sending
+	// log.Printf("Sending [%v]: %d %x", channel.Tag, queryId, job)
 	n, err := channel.RW.Write(job)
 	if err != nil {
 		return nil, err
@@ -78,15 +80,18 @@ func ReadAll(reader io.Reader, size int) ([]byte, error) {
 		n, err := reader.Read(bt)
 		switch err {
 		case io.EOF:
+			// log.Println("EOF")
 			continue
 		case nil:
 		default:
 			return nil, err
 		}
 		if n == 0 {
+			// log.Println("EMPTY")
 			continue
 		}
 		buffer.WriteByte(bt[0])
+		// log.Printf("Received %x", bt[0])
 		read++
 		if read >= size {
 			break
@@ -157,6 +162,6 @@ func SerialOpen(path string) (*SerialChannel, error) {
 	if err != nil {
 		return nil, err
 	} else {
-		return &SerialChannel{RW: res, Closed: false, queryId: 0, callbacks: make(map[uint32]chan []byte)}, nil
+		return &SerialChannel{RW: res, Closed: false, queryId: 0, callbacks: make(map[uint32]chan []byte), Tag: path}, nil
 	}
 }
