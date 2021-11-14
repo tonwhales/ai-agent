@@ -564,46 +564,45 @@ func main() {
 				}
 				port.Start()
 
-				log.Printf("[%2d] Starting threads\n", boardId)
 				var latestQuery uint32 = 0
-				go (func() {
-					for {
-						config := lastestConfig
-						queryId := atomic.AddUint32(&latestQuery, 1)
-						log.Printf("[%2d] Attempt    : %d\n", boardId, queryId)
+				for {
+					config := lastestConfig
+					queryId := atomic.AddUint32(&latestQuery, 1)
+					log.Printf("[%2d] Attempt    : %d\n", boardId, queryId)
 
-						// Create random
-						random := make([]byte, 32)
-						rand.Read(random)
+					// Create random
+					random := make([]byte, 32)
+					rand.Read(random)
 
-						// Create block
-						data := make([]byte, 0)
-						data = append(data, config.Header...)
-						data = append(data, random...)
-						data = append(data, config.Seed...)
-						data = append(data, random...)
+					// Create block
+					data := make([]byte, 0)
+					data = append(data, config.Header...)
+					data = append(data, random...)
+					data = append(data, config.Seed...)
+					data = append(data, random...)
 
-						// Do Job
-						result, err := performJob(port, data, uint32(*iterations), *timeout, boardId, false)
-						if err != nil {
-							log.Printf("[%2d] %v\n", boardId, err)
-							delayRetry()
-							continue
-						}
-
-						// Process
-						if result == nil {
-							log.Printf("Unable to get results")
-						} else {
-
-							// Apply stats
-							applyMined(&stats, int64(*iterations)*IterationsMultiplier)
-
-							// Report
-							reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
-						}
+					// Do Job
+					result, err := performJob(port, data, uint32(*iterations), *timeout, boardId, false)
+					if err != nil {
+						log.Printf("[%2d] %v\n", boardId, err)
+						delayRetry()
+						continue
 					}
-				})()
+
+					// Process
+					if result == nil {
+						log.Printf("Unable to get results")
+					} else {
+						total := int64(*iterations) * IterationsMultiplier
+						log.Printf("[%2d] Mined %f GH\n", boardId, float64(total)/1000000000)
+
+						// Apply stats
+						applyMined(&stats, total)
+
+						// Report
+						reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
+					}
+				}
 			})()
 		}
 
