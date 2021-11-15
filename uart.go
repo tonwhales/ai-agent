@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"log"
 	"sync"
-	"time"
 
 	"github.com/jacobsa/go-serial/serial"
 	"github.com/sigurn/crc16"
@@ -50,7 +50,7 @@ func (channel *SerialChannel) Write(chipId int, data []byte) error {
 }
 
 func (channel *SerialChannel) Read() (*SerialFrame, error) {
-	timer := time.NewTimer(1000 * time.Millisecond)
+	// timer := time.NewTimer(1000 * time.Millisecond)
 	doneError := make(chan error, 1)
 	doneFrame := make(chan *SerialFrame, 1)
 	go func() {
@@ -68,8 +68,8 @@ func (channel *SerialChannel) Read() (*SerialFrame, error) {
 		return nil, err
 	case p := <-doneFrame:
 		return p, nil
-	case <-timer.C:
-		return nil, errors.New("Request timeout")
+		// case <-timer.C:
+		// 	return nil, errors.New("Request timeout")
 	}
 }
 
@@ -95,6 +95,7 @@ func (channel *SerialChannel) Close() {
 
 func (channel *SerialChannel) doWrite(chipId int, data []byte) error {
 	packed := pack(uint8(chipId), 0x0, data)
+	log.Printf("Write: %x", packed)
 	n, err := channel.RW.Write(packed)
 	if err != nil {
 		return err
@@ -128,6 +129,7 @@ func (channel *SerialChannel) doRead() (*SerialFrame, error) {
 			fallthrough
 		default:
 			buffer.WriteByte(b[0])
+			log.Printf("Received: %x", buffer.Bytes())
 		}
 	}
 }
