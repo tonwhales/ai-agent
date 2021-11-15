@@ -11,6 +11,16 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 	// Job ID
 	queryId := channel.queryId
 	channel.queryId++
+	statusCheck := []byte{0x9a}
+
+	// Preflight check
+	res, err := channel.Request(chipId, 0x0, statusCheck)
+	if err != nil {
+		return nil, err
+	}
+	if len(res.Data) == 0 {
+		return nil, errors.New("invalid frame")
+	}
 
 	// Package
 	job := []byte{0x8c}
@@ -18,7 +28,10 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 	binary.BigEndian.PutUint32(tmp, queryId)
 	job = append(job, tmp...)
 	job = append(job, data...)
-	channel.Write(chipId, job)
+	err = channel.Write(chipId, 0x00, job)
+	if err != nil {
+		return nil, err
+	}
 
 	// Check job
 	start := time.Now()
@@ -30,11 +43,10 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 		}
 
 		// Retry every 200 ms
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 
 		// Do check
-		statusCheck := []byte{0x9a}
-		res, err := channel.Request(chipId, statusCheck)
+		res, err := channel.Request(chipId, 0x0, statusCheck)
 		if err != nil {
 			return nil, err
 		}

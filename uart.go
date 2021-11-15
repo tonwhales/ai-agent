@@ -31,7 +31,7 @@ func SerialOpen(path string) (*SerialChannel, error) {
 		PortName:              path,
 		BaudRate:              115200,
 		DataBits:              8,
-		StopBits:              2,
+		StopBits:              1,
 		InterCharacterTimeout: 100,
 		MinimumReadSize:       0,
 		RTSCTSFlowControl:     false,
@@ -43,10 +43,10 @@ func SerialOpen(path string) (*SerialChannel, error) {
 	}
 }
 
-func (channel *SerialChannel) Write(chipId int, data []byte) error {
+func (channel *SerialChannel) Write(chipId int, reqType uint8, data []byte) error {
 	channel.writeLock.Lock()
 	defer channel.writeLock.Unlock()
-	return channel.doWrite(chipId, data)
+	return channel.doWrite(chipId, reqType, data)
 }
 
 func (channel *SerialChannel) Read() (*SerialFrame, error) {
@@ -73,8 +73,11 @@ func (channel *SerialChannel) Read() (*SerialFrame, error) {
 	}
 }
 
-func (channel *SerialChannel) Request(chipId int, data []byte) (*SerialFrame, error) {
-	channel.Write(chipId, data)
+func (channel *SerialChannel) Request(chipId int, reqType uint8, data []byte) (*SerialFrame, error) {
+	err := channel.Write(chipId, reqType, data)
+	if err != nil {
+		return nil, err
+	}
 	return channel.Read()
 }
 
@@ -93,9 +96,9 @@ func (channel *SerialChannel) Close() {
 //  Implementation
 //////////////////////////////////////////////////////////////////////////////////////////
 
-func (channel *SerialChannel) doWrite(chipId int, data []byte) error {
-	packed := pack(uint8(chipId), 0x0, data)
-	log.Printf("Write: %x", packed)
+func (channel *SerialChannel) doWrite(chipId int, reqType uint8, data []byte) error {
+	packed := pack(uint8(chipId), reqType, data)
+	log.Printf("Write: %x: %d|%d|%x", packed, chipId, reqType, data)
 	n, err := channel.RW.Write(packed)
 	if err != nil {
 		return err
@@ -110,7 +113,7 @@ func (channel *SerialChannel) doRead() (*SerialFrame, error) {
 	var buffer bytes.Buffer
 	b := make([]byte, 1)
 	for {
-		_, err := channel.RW.Read(b)
+		n, err := channel.RW.Read(b)
 		switch err {
 		case io.EOF:
 			continue
@@ -118,6 +121,10 @@ func (channel *SerialChannel) doRead() (*SerialFrame, error) {
 		default:
 			return nil, err
 		}
+		if n != 1 {
+			continue
+		}
+		log.Printf("Received: %02x", b[0])
 
 		switch b[0] {
 		case STX:
@@ -135,7 +142,6 @@ func (channel *SerialChannel) doRead() (*SerialFrame, error) {
 			fallthrough
 		default:
 			buffer.WriteByte(b[0])
-			log.Printf("Received: %x", buffer.Bytes())
 		}
 	}
 }

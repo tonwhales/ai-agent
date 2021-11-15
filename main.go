@@ -462,7 +462,7 @@ func main() {
 	test := flag.Bool("test", false, "Use test serial debug")
 	env := flag.String("dc", "dev", "DC ID")
 	supervised := flag.Bool("supervised", false, "Supervised invironment")
-	chip := flag.Int("chipd", 6, "Working Chip ID")
+	chip := flag.Int("chip", 6, "Working Chip ID")
 	flag.Parse()
 
 	// Resolve Device ID and Name
@@ -503,29 +503,35 @@ func main() {
 
 		// Write data
 		log.Println("Wait...")
-		on := false
+		on := true
 		for {
 			time.Sleep(1 * time.Second)
 			if on {
-				data, err := hex.DecodeString("00")
+				str := "8c 00 00 00 00 fa 8c c0 0a 18 ed 5b e1 a9 4c c5 62 7e 2b 11 b7 ed 25 3a b0 c9 9a 98 d8 e0 12 06 86 1b 02 cf 4d bb 3a 00 9a 01 50 cf 88 f5 c8 9e 47 ea 0a 1b 03 0d 5e 23 c5 35 de 8a c4 d9 e2 b4 2c e7 28 ed 16 91 ca 9e 25 45 ef f3 f8 93 a5 3f 80 5c 69 e7 5d 8d 3e 3a 00 9a 01 50 cf 88 f5 c8 9e 47 80 00 00 00 00 00 0f 42 40"
+				str = strings.ReplaceAll(str, " ", "")
+				data, err := hex.DecodeString(str)
 				if err != nil {
 					log.Panicln(err)
 				}
-				pp.Write(*chip, data)
+				err = pp.Write(*chip, 0x0, data)
+				if err != nil {
+					log.Panicln(err)
+				}
 				log.Printf("Written %x\n", data)
 			} else {
-				data, err := hex.DecodeString("01")
+				data, err := hex.DecodeString("9A")
 				if err != nil {
 					log.Panicln(err)
 				}
-				pp.Write(*chip, data)
+				err = pp.Write(*chip, 0x0, data)
+				if err != nil {
+					log.Panicln(err)
+				}
 				log.Printf("Written %x\n", data)
+
+				// 0200000600019a738103
+				// 0200010600019ab3bc03
 			}
-			rr, err := pp.Read()
-			if err != nil {
-				log.Panicln(err)
-			}
-			log.Printf("Read %x from %d\n", rr.Data, rr.ChipID)
 			on = !on
 		}
 
