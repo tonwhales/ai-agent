@@ -110,9 +110,15 @@ func (channel *SerialChannel) doRead() (*SerialFrame, error) {
 	var buffer bytes.Buffer
 	b := make([]byte, 1)
 	for {
-		if _, err := channel.RW.Read(b); err != nil {
+		_, err := channel.RW.Read(b)
+		switch err {
+		case io.EOF:
+			continue
+		case nil:
+		default:
 			return nil, err
 		}
+
 		switch b[0] {
 		case STX:
 			buffer.Reset()
