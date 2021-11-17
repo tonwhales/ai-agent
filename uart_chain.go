@@ -10,8 +10,10 @@ import (
 func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuration int) ([]byte, error) {
 
 	// Job ID
+	channel.queryIdLock.Lock()
 	queryId := channel.queryId
 	channel.queryId++
+	channel.queryIdLock.Unlock()
 	statusCheck := []byte{0x9a}
 
 	// Preflight check
@@ -68,7 +70,7 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 
 		// Check job id
 		if receivedJobId != queryId {
-			return nil, fmt.Errorf("job mismatch. expected: %x, got: %x", queryId, receivedJobId)
+			return nil, fmt.Errorf("job mismatch. expected: %d, got: %d", queryId, receivedJobId)
 		}
 
 		// Job not ready

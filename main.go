@@ -451,7 +451,6 @@ func applyMined(stats *Stats, count int64) {
 
 func main() {
 
-	var port *SerialChannel = nil
 	var err error
 
 	// Arguments
@@ -532,7 +531,7 @@ func main() {
 		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
 
 		// Write job
-		job, err := hex.DecodeString("`de557f05c301618d5f527f856bff0452611101e9e601a81c0fbba95cbc0eb3fdaf50c54acefc0817ac0465fe3df51f0671341bfca85a552fc1b1f3adb73d4108996e7466b32669a0a174eb397ddee4c9af50c54acefc0817ac046580000000002faf0800`")
+		job, err := hex.DecodeString("de557f05c301618d5f527f856bff0452611101e9e601a81c0fbba95cbc0eb3fdaf50c54acefc0817ac0465fe3df51f0671341bfca85a552fc1b1f3adb73d4108996e7466b32669a0a174eb397ddee4c9af50c54acefc0817ac046580000000002faf0800")
 		if err != nil {
 			log.Panicln(err)
 		}
@@ -621,11 +620,16 @@ func main() {
 		log.Println("Running in supervised mode")
 		ports := []string{
 			"/dev/ttyO1",
-			// "/dev/ttyO2",
-			// "/dev/ttyO5",
+			"/dev/ttyO2",
+			"/dev/ttyO5",
 		}
 		chips := []int{
-			1, 2, 3, 4, 5, 6,
+			1,
+			2,
+			3,
+			4,
+			5,
+			6,
 		}
 
 		// Uploading
@@ -655,7 +659,7 @@ func main() {
 			boardId := index
 			go (func() {
 				log.Printf("[%2d] Connecting to board\n", boardId)
-				port, err = SerialOpen(ports[boardId], 115200)
+				port, err := SerialOpen(ports[boardId], 115200)
 				if err != nil {
 					log.Panicln(err)
 				}
@@ -711,6 +715,7 @@ func main() {
 	}
 
 	// Port
+	var port *SerialChannel = nil
 	if portName != nil && *portName != "" {
 		log.Println("Connecting to COM port...")
 		port, err = SerialOpen(*portName, 115200)

@@ -14,6 +14,8 @@ import (
 )
 
 type SerialChannel struct {
+	Tag         string
+	queryIdLock sync.Mutex
 	queryId     uint32
 	Closed      bool
 	RW          io.ReadWriteCloser
@@ -41,7 +43,7 @@ func SerialOpen(path string, speed uint) (*SerialChannel, error) {
 	if err != nil {
 		return nil, err
 	} else {
-		return &SerialChannel{RW: res, Closed: false, queryId: 0, callbacks: make(map[uint32]chan []byte)}, nil
+		return &SerialChannel{RW: res, Closed: false, queryId: 0, callbacks: make(map[uint32]chan []byte), Tag: path}, nil
 	}
 }
 
@@ -180,7 +182,7 @@ func (channel *SerialChannel) SetFrequency(chipId int, frequency int) error {
 
 func (channel *SerialChannel) doWrite(chipId int, reqType uint8, data []byte) error {
 	packed := pack(uint8(chipId), reqType, data)
-	// log.Printf("Write: %x: %d|%d|%x", packed, chipId, reqType, data)
+	// log.Printf("[%v] Write: %x: %d|%d|%x", channel.Tag, packed, chipId, reqType, data)
 	n, err := channel.RW.Write(packed)
 	if err != nil {
 		return err
@@ -193,7 +195,7 @@ func (channel *SerialChannel) doWrite(chipId int, reqType uint8, data []byte) er
 
 func (channel *SerialChannel) doRead() (*SerialFrame, error) {
 	var buffer bytes.Buffer
-	// var buffer2 bytes.Buffer
+	var buffer2 bytes.Buffer
 	b := make([]byte, 1)
 	for {
 		n, err := channel.RW.Read(b)
@@ -208,7 +210,7 @@ func (channel *SerialChannel) doRead() (*SerialFrame, error) {
 			continue
 		}
 		// log.Printf("Received: %02x", b[0])
-		// buffer2.WriteByte(b[0])
+		buffer2.WriteByte(b[0])
 
 		switch b[0] {
 		case STX:
@@ -235,7 +237,7 @@ func (channel *SerialChannel) doRead() (*SerialFrame, error) {
 				if n != 1 {
 					continue
 				}
-				// buffer2.WriteByte(b[0])
+				buffer2.WriteByte(b[0])
 				break
 			}
 			// log.Printf("Received: %02x", b[0])
@@ -314,7 +316,7 @@ func pack(id uint8, requestType uint8, data []byte) []byte {
 func parsePacket(p []byte) (*SerialFrame, error) {
 	// check length
 	if len(p) < PacketHeaderLength {
-		return nil, errors.New("invalid packet")
+		return nil, fmt.Errorf("invalid parsing: %x", p)
 	}
 	// parse header
 	hdr := packetHeader{}
@@ -322,7 +324,7 @@ func parsePacket(p []byte) (*SerialFrame, error) {
 	binary.Read(headerBuf, binary.BigEndian, &hdr)
 	data := p[PacketHeaderLength:]
 	if len(data) != int(hdr.Length) {
-		return nil, errors.New("invalid packet")
+		return nil, fmt.Errorf("invalid parsing: %x", p)
 	}
 	res := SerialFrame{ChipID: hdr.ID, Data: data}
 	return &res, nil
@@ -345,14 +347,14 @@ func unserialize(p []byte) (*SerialFrame, error) {
 func popCRC(p []byte) ([]byte, error) {
 	// check length
 	if len(p) < PacketChecksumLength {
-		return nil, errors.New("invalid packet")
+		return nil, fmt.Errorf("invalid packet: %x", p)
 	}
 	pcrc := len(p) - PacketChecksumLength
 	payload := p[:pcrc]
 	checksum := p[pcrc:]
 	// checksum
 	if !bytes.Equal(checksum, calcChecksum(payload)) {
-		return nil, fmt.Errorf("checksum failed expected %x, got %x", calcChecksum(payload), checksum)
+		return nil, fmt.Errorf("checksum failed expected %x, got %x. data: %x", calcChecksum(payload), checksum, p)
 	}
 	return payload, nil
 }
