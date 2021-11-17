@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -14,13 +15,13 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 	statusCheck := []byte{0x9a}
 
 	// Preflight check
-	res, err := channel.Request(chipId, 0x0, statusCheck)
-	if err != nil {
-		return nil, err
-	}
-	if len(res.Data) == 0 {
-		return nil, errors.New("invalid frame")
-	}
+	// res, err := channel.Request(chipId, 0x0, statusCheck)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if len(res.Data) == 0 {
+	// 	return nil, errors.New("invalid frame")
+	// }
 
 	// Package
 	job := []byte{0x8c}
@@ -28,7 +29,7 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 	binary.BigEndian.PutUint32(tmp, queryId)
 	job = append(job, tmp...)
 	job = append(job, data...)
-	err = channel.Write(chipId, 0x00, job)
+	err := channel.Write(chipId, 0x00, job)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 		}
 
 		// Retry every 200 ms
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
 		// Do check
 		res, err := channel.Request(chipId, 0x0, statusCheck)
@@ -67,7 +68,7 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 
 		// Check job id
 		if receivedJobId != queryId {
-			return nil, errors.New("job mismatch")
+			return nil, fmt.Errorf("job mismatch. expected: %x, got: %x", queryId, receivedJobId)
 		}
 
 		// Job not ready

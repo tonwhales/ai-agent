@@ -485,54 +485,116 @@ func main() {
 		}
 
 		log.Println("Connecting to COM port...")
-		pp, err := SerialOpen(*portName)
+		pp, err := SerialOpen(*portName, 921600)
 		if err != nil {
 			log.Panicln(err)
 		}
 
 		// Read cycle
-		go (func() {
-			for {
-				frame, err := pp.Read()
-				if err != nil {
-					log.Panicln(err)
-				}
-				log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
-			}
-		})()
+		// go (func() {
+		// 	for {
+		// 		frame, err := pp.Read()
+		// 		if err != nil {
+		// 			log.Panicln(err)
+		// 		}
+		// 		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+		// 	}
+		// })()
 
 		// Write data
 		log.Println("Wait...")
-		on := true
+
+		// Fastclock
+		frame, err := pp.Request(*chip, 0xA2, []byte{0x0F, 0x01})
+		if err != nil {
+			log.Panicln(err)
+		}
+		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+
+		// Set frequency
+		err = pp.SetFrequency(*chip, 100)
+		if err != nil {
+			log.Panicln(err)
+		}
+
+		// CoinID
+		frame, err = pp.Request(*chip, 0xA2, []byte{0x20})
+		if err != nil {
+			log.Panicln(err)
+		}
+		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+
+		// Cores
+		frame, err = pp.Request(*chip, 0xA2, []byte{0x21})
+		if err != nil {
+			log.Panicln(err)
+		}
+		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+
+		// Write job
+		job, err := hex.DecodeString("`de557f05c301618d5f527f856bff0452611101e9e601a81c0fbba95cbc0eb3fdaf50c54acefc0817ac0465fe3df51f0671341bfca85a552fc1b1f3adb73d4108996e7466b32669a0a174eb397ddee4c9af50c54acefc0817ac046580000000002faf0800`")
+		if err != nil {
+			log.Panicln(err)
+		}
+		frame, err = pp.Request(*chip, 0xA2, append([]byte{0x11, 0x00}, job...))
+		if err != nil {
+			log.Panicln(err)
+		}
+		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+
+		// on := true
+		// for {
+		// 	time.Sleep(1 * time.Second)
+		// 	if on {
+		// 		str := "8c 00 00 00 00 fa 8c c0 0a 18 ed 5b e1 a9 4c c5 62 7e 2b 11 b7 ed 25 3a b0 c9 9a 98 d8 e0 12 06 86 1b 02 cf 4d bb 3a 00 9a 01 50 cf 88 f5 c8 9e 47 ea 0a 1b 03 0d 5e 23 c5 35 de 8a c4 d9 e2 b4 2c e7 28 ed 16 91 ca 9e 25 45 ef f3 f8 93 a5 3f 80 5c 69 e7 5d 8d 3e 3a 00 9a 01 50 cf 88 f5 c8 9e 47 80 00 00 00 00 00 0f 42 40"
+		// 		str = strings.ReplaceAll(str, " ", "")
+		// 		data, err := hex.DecodeString(str)
+		// 		if err != nil {
+		// 			log.Panicln(err)
+		// 		}
+		// 		err = pp.Write(*chip, 0x0, data)
+		// 		if err != nil {
+		// 			log.Panicln(err)
+		// 		}
+		// 		log.Printf("Written %x\n", data)
+		// 	} else {
+		// 		data, err := hex.DecodeString("9A")
+		// 		if err != nil {
+		// 			log.Panicln(err)
+		// 		}
+		// 		err = pp.Write(*chip, 0x0, data)
+		// 		if err != nil {
+		// 			log.Panicln(err)
+		// 		}
+		// 		log.Printf("Written %x\n", data)
+
+		// 		// 0200000600019a738103
+		// 		// 0200010600019ab3bc03
+		// 	}
+		// 	on = !on
+		// }
+
 		for {
 			time.Sleep(1 * time.Second)
-			if on {
-				str := "8c 00 00 00 00 fa 8c c0 0a 18 ed 5b e1 a9 4c c5 62 7e 2b 11 b7 ed 25 3a b0 c9 9a 98 d8 e0 12 06 86 1b 02 cf 4d bb 3a 00 9a 01 50 cf 88 f5 c8 9e 47 ea 0a 1b 03 0d 5e 23 c5 35 de 8a c4 d9 e2 b4 2c e7 28 ed 16 91 ca 9e 25 45 ef f3 f8 93 a5 3f 80 5c 69 e7 5d 8d 3e 3a 00 9a 01 50 cf 88 f5 c8 9e 47 80 00 00 00 00 00 0f 42 40"
-				str = strings.ReplaceAll(str, " ", "")
-				data, err := hex.DecodeString(str)
-				if err != nil {
-					log.Panicln(err)
-				}
-				err = pp.Write(*chip, 0x0, data)
-				if err != nil {
-					log.Panicln(err)
-				}
-				log.Printf("Written %x\n", data)
-			} else {
-				data, err := hex.DecodeString("9A")
-				if err != nil {
-					log.Panicln(err)
-				}
-				err = pp.Write(*chip, 0x0, data)
-				if err != nil {
-					log.Panicln(err)
-				}
-				log.Printf("Written %x\n", data)
 
-				// 0200000600019a738103
-				// 0200010600019ab3bc03
+			// Temp
+			pp.Write(*chip, 0xA2, []byte{0x31, 0x00})
+			frame, err = pp.Read()
+			if err != nil {
+				log.Panicln(err)
 			}
-			on = !on
+			log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+			x := float32(binary.BigEndian.Uint16(frame.Data))
+			temp := x*502.9098/65536 - 273.819
+			log.Printf("Temperature %f", temp)
+
+			// Status
+			pp.Write(*chip, 0xA2, []byte{0x12, 0x00})
+			frame, err = pp.Read()
+			if err != nil {
+				log.Panicln(err)
+			}
+			log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
 		}
 
 		// bt := make([]byte, 1)
@@ -559,8 +621,11 @@ func main() {
 		log.Println("Running in supervised mode")
 		ports := []string{
 			"/dev/ttyO1",
-			"/dev/ttyO2",
-			"/dev/ttyO5",
+			// "/dev/ttyO2",
+			// "/dev/ttyO5",
+		}
+		chips := []int{
+			1, 2, 3, 4, 5, 6,
 		}
 
 		// Uploading
@@ -580,55 +645,64 @@ func main() {
 			}
 		})()
 
+		// Config
+		defaultIterations := 800000000
+		defaultTimeout := 60
+		iterations := &defaultIterations
+		timeout := &defaultTimeout
+
 		for index := range ports {
 			boardId := index
 			go (func() {
 				log.Printf("[%2d] Connecting to board\n", boardId)
-				port, err = SerialOpen(ports[boardId])
+				port, err = SerialOpen(ports[boardId], 115200)
 				if err != nil {
 					log.Panicln(err)
 				}
 
 				log.Printf("[%2d] Starting threads\n", boardId)
 				var latestQuery uint32 = 0
-				go (func() {
-					for {
-						config := lastestConfig
-						queryId := atomic.AddUint32(&latestQuery, 1)
-						log.Printf("[%2d] Attempt    : %d\n", boardId, queryId)
+				for chipIndex := range chips {
+					chipId := chips[chipIndex]
+					go (func() {
+						for {
+							config := lastestConfig
+							queryId := atomic.AddUint32(&latestQuery, 1)
+							log.Printf("[%2d] Attempt    : %d\n", boardId, queryId)
 
-						// Create random
-						random := make([]byte, 32)
-						rand.Read(random)
+							// Create random
+							random := make([]byte, 32)
+							rand.Read(random)
 
-						// Create block
-						data := make([]byte, 0)
-						data = append(data, config.Header...)
-						data = append(data, random...)
-						data = append(data, config.Seed...)
-						data = append(data, random...)
+							// Create block
+							data := make([]byte, 0)
+							data = append(data, config.Header...)
+							data = append(data, random...)
+							data = append(data, config.Seed...)
+							data = append(data, random...)
 
-						// Do Job
-						result, err := performJob(port, data, uint32(*iterations), *timeout, boardId, *chip, false)
-						if err != nil {
-							log.Printf("[%2d] %v\n", boardId, err)
-							delayRetry()
-							continue
+							// Do Job
+							result, err := performJob(port, data, uint32(*iterations), *timeout, boardId, chipId, false)
+							if err != nil {
+								log.Printf("[%2d] %v\n", boardId, err)
+								delayRetry()
+								continue
+							}
+
+							// Process
+							if result == nil {
+								log.Printf("Unable to get results")
+							} else {
+
+								// Apply stats
+								applyMined(&stats, int64(*iterations)*IterationsMultiplier)
+
+								// Report
+								reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
+							}
 						}
-
-						// Process
-						if result == nil {
-							log.Printf("Unable to get results")
-						} else {
-
-							// Apply stats
-							applyMined(&stats, int64(*iterations)*IterationsMultiplier)
-
-							// Report
-							reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
-						}
-					}
-				})()
+					})()
+				}
 			})()
 		}
 
@@ -639,7 +713,7 @@ func main() {
 	// Port
 	if portName != nil && *portName != "" {
 		log.Println("Connecting to COM port...")
-		port, err = SerialOpen(*portName)
+		port, err = SerialOpen(*portName, 115200)
 		if err != nil {
 			log.Panicln(err)
 		}
@@ -725,7 +799,8 @@ func main() {
 				// Do Job
 				result, err := performJob(port, data, uint32(*iterations), *timeout, 0, *chip, true)
 				if err != nil {
-					log.Panicln(err)
+					log.Println(err)
+					continue
 				}
 
 				// Process
