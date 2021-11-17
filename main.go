@@ -365,17 +365,19 @@ func GetLocalIP() string {
 }
 
 type Stats struct {
-	Id       string
-	Name     string
-	Hashrate int64
-	Mined    int64
-	Mutex    sync.Mutex
+	Id         string
+	Name       string
+	Datacenter string
+	Hashrate   int64
+	Mined      int64
+	Mutex      sync.Mutex
 }
 
 type StatsBody struct {
-	Id       string  `json:"id"`
-	Name     string  `json:"name"`
-	Hashrate float64 `json:"hashrate"`
+	Id         string  `json:"id"`
+	Name       string  `json:"name"`
+	Datacenter string  `json:"dc"`
+	Hashrate   float64 `json:"hashrate"`
 }
 
 func doStatsReport(data StatsBody) error {
@@ -433,9 +435,10 @@ func startStatsReporting(stats *Stats) {
 	for {
 		stats.Mutex.Lock()
 		data := StatsBody{
-			Id:       stats.Id,
-			Name:     stats.Name,
-			Hashrate: float64(stats.Hashrate) / 1000000000,
+			Id:         stats.Id,
+			Name:       stats.Name,
+			Datacenter: stats.Datacenter,
+			Hashrate:   float64(stats.Hashrate) / 1000000000,
 		}
 		stats.Mutex.Unlock()
 		doStatsReport(data)
@@ -475,7 +478,7 @@ func main() {
 	log.Printf("Started device " + deviceName + "(" + id + ")")
 
 	// Stats
-	stats := Stats{Hashrate: 0, Id: id, Name: deviceName}
+	stats := Stats{Hashrate: 0, Id: id, Name: deviceName, Datacenter: *env}
 
 	// Test
 	if test != nil && *test {
