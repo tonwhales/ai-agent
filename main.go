@@ -669,6 +669,7 @@ func main() {
 				for chipIndex := range chips {
 					chipId := chips[chipIndex]
 					go (func() {
+					outer:
 						for {
 							config := lastestConfig
 							queryId := atomic.AddUint32(&latestQuery, 1)
@@ -700,6 +701,13 @@ func main() {
 
 								// Apply stats
 								applyMined(&stats, int64(*iterations)*IterationsMultiplier)
+
+								// Check if not enough zeros
+								for i := 0; i < 5; i++ {
+									if result.Value[i] != 0 {
+										continue outer
+									}
+								}
 
 								// Report
 								reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
