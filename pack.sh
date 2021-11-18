@@ -11,7 +11,7 @@ cd build
 rm -fr package
 mkdir package
 cp ai-linux-arm ./package/
-cp ../bits/i33.bit ./package/ai.bit
+cp ../bits/i34.bit ./package/ai.bit
 cp ../scripts/install.sh ./package/install.sh
 cp ../scripts/start.sh ./package/start.sh
 cd package
