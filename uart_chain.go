@@ -11,8 +11,8 @@ func (channel *SerialChannel) PerformJob(chipId int, data []byte, timeoutDuratio
 
 	// Job ID
 	channel.queryIdLock.Lock()
-	queryId := channel.queryId
-	channel.queryId++
+	queryId := (channel.queryId + 1) % 256
+	channel.queryId = queryId
 	channel.queryIdLock.Unlock()
 	statusCheck := []byte{0x9a}
 
