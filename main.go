@@ -487,7 +487,7 @@ func main() {
 		}
 
 		log.Println("Connecting to COM port...")
-		pp, err := SerialOpen(*portName, 921600)
+		pp, err := SerialOpen(*portName, 115200)
 		if err != nil {
 			log.Panicln(err)
 		}
@@ -507,42 +507,42 @@ func main() {
 		log.Println("Wait...")
 
 		// Fastclock
-		frame, err := pp.Request(*chip, 0xA2, []byte{0x0F, 0x01})
-		if err != nil {
-			log.Panicln(err)
-		}
-		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+		// frame, err := pp.Request(*chip, 0xA2, []byte{0x0F, 0x01})
+		// if err != nil {
+		// 	log.Panicln(err)
+		// }
+		// log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
 
-		// Set frequency
-		err = pp.SetFrequency(*chip, 100)
-		if err != nil {
-			log.Panicln(err)
-		}
+		// // Set frequency
+		// err = pp.SetFrequency(*chip, 100)
+		// if err != nil {
+		// 	log.Panicln(err)
+		// }
 
-		// CoinID
-		frame, err = pp.Request(*chip, 0xA2, []byte{0x20})
-		if err != nil {
-			log.Panicln(err)
-		}
-		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+		// // CoinID
+		// frame, err = pp.Request(*chip, 0xA2, []byte{0x20})
+		// if err != nil {
+		// 	log.Panicln(err)
+		// }
+		// log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
 
-		// Cores
-		frame, err = pp.Request(*chip, 0xA2, []byte{0x21})
-		if err != nil {
-			log.Panicln(err)
-		}
-		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+		// // Cores
+		// frame, err = pp.Request(*chip, 0xA2, []byte{0x21})
+		// if err != nil {
+		// 	log.Panicln(err)
+		// }
+		// log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
 
 		// Write job
-		job, err := hex.DecodeString("de557f05c301618d5f527f856bff0452611101e9e601a81c0fbba95cbc0eb3fdaf50c54acefc0817ac0465fe3df51f0671341bfca85a552fc1b1f3adb73d4108996e7466b32669a0a174eb397ddee4c9af50c54acefc0817ac046580000000002faf0800")
-		if err != nil {
-			log.Panicln(err)
-		}
-		frame, err = pp.Request(*chip, 0xA2, append([]byte{0x11, 0x00}, job...))
-		if err != nil {
-			log.Panicln(err)
-		}
-		log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+		// job, err := hex.DecodeString("de557f05c301618d5f527f856bff0452611101e9e601a81c0fbba95cbc0eb3fdaf50c54acefc0817ac0465fe3df51f0671341bfca85a552fc1b1f3adb73d4108996e7466b32669a0a174eb397ddee4c9af50c54acefc0817ac046580000000002faf0800")
+		// if err != nil {
+		// 	log.Panicln(err)
+		// }
+		// frame, err = pp.Request(*chip, 0xA2, append([]byte{0x11, 0x00}, job...))
+		// if err != nil {
+		// 	log.Panicln(err)
+		// }
+		// log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
 
 		// on := true
 		// for {
@@ -580,23 +580,23 @@ func main() {
 			time.Sleep(1 * time.Second)
 
 			// Temp
-			pp.Write(*chip, 0xA2, []byte{0x31, 0x00})
-			frame, err = pp.Read()
+			pp.Write(*chip, 0x00, []byte{0x7c, 0x0e, 0x00, 0x00, 0x00})
+			frame, err := pp.Read()
 			if err != nil {
 				log.Panicln(err)
 			}
 			log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
-			x := float32(binary.BigEndian.Uint16(frame.Data))
+			x := float32(binary.BigEndian.Uint16(frame.Data[1:]))
 			temp := x*502.9098/65536 - 273.819
 			log.Printf("Temperature %f", temp)
 
 			// Status
-			pp.Write(*chip, 0xA2, []byte{0x12, 0x00})
-			frame, err = pp.Read()
-			if err != nil {
-				log.Panicln(err)
-			}
-			log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
+			// pp.Write(*chip, 0xA2, []byte{0x12, 0x00})
+			// frame, err = pp.Read()
+			// if err != nil {
+			// 	log.Panicln(err)
+			// }
+			// log.Printf("Frame from %d: %x \n", frame.ChipID, frame.Data)
 		}
 
 		// bt := make([]byte, 1)
