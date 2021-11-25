@@ -240,6 +240,11 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 				log.Printf("[%2d] LOCAL HASH   : %x", board, localHash)
 			}
 
+			// Check hash
+			if !bytes.Equal(hash, localHash) {
+				return nil, fmt.Errorf("hash mismatch. Expected %x, but got %x", localHash, hash)
+			}
+
 			return &JobResult{Random: nrandom, Value: localHash}, nil
 		}
 	} else {
@@ -365,19 +370,25 @@ func GetLocalIP() string {
 }
 
 type Stats struct {
-	Id         string
-	Name       string
-	Datacenter string
-	Hashrate   int64
-	Mined      int64
-	Mutex      sync.Mutex
+	Id           string
+	Name         string
+	Datacenter   string
+	Hashrate     int64
+	Mined        int64
+	Mutex        sync.Mutex
+	Temperatures [][]float32
 }
 
 type StatsBody struct {
-	Id         string  `json:"id"`
-	Name       string  `json:"name"`
-	Datacenter string  `json:"dc"`
-	Hashrate   float64 `json:"hashrate"`
+	Id           string            `json:"id"`
+	Name         string            `json:"name"`
+	Datacenter   string            `json:"dc"`
+	Hashrate     float64           `json:"hashrate"`
+	Temperatures []TemperatureBody `json:"temperature"`
+}
+type TemperatureBody struct {
+	Id    string  `json:"id"`
+	Value float32 `json:"value"`
 }
 
 func doStatsReport(data StatsBody) error {
@@ -434,11 +445,21 @@ func startStatsReporting(stats *Stats) {
 
 	for {
 		stats.Mutex.Lock()
+		temperatures := make([]TemperatureBody, 0)
+		for board := 0; board < 3; board++ {
+			for chip := 0; chip < 6; chip++ {
+				temperatures = append(temperatures, TemperatureBody{
+					Id:    fmt.Sprintf("chip_%d_%d", board, chip),
+					Value: stats.Temperatures[board][chip],
+				})
+			}
+		}
 		data := StatsBody{
-			Id:         stats.Id,
-			Name:       stats.Name,
-			Datacenter: stats.Datacenter,
-			Hashrate:   float64(stats.Hashrate) / 1000000000,
+			Id:           stats.Id,
+			Name:         stats.Name,
+			Datacenter:   stats.Datacenter,
+			Hashrate:     float64(stats.Hashrate) / 1000000000,
+			Temperatures: temperatures,
 		}
 		stats.Mutex.Unlock()
 		doStatsReport(data)
@@ -478,7 +499,7 @@ func main() {
 	log.Printf("Started device " + deviceName + "(" + id + ")")
 
 	// Stats
-	stats := Stats{Hashrate: 0, Id: id, Name: deviceName, Datacenter: *env}
+	stats := Stats{Hashrate: 0, Id: id, Name: deviceName, Datacenter: *env, Temperatures: [][]float32{{0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}}}
 
 	// Test
 	if test != nil && *test {
@@ -671,6 +692,8 @@ func main() {
 				var latestQuery uint32 = 0
 				for chipIndex := range chips {
 					chipId := chips[chipIndex]
+
+					// Jobs
 					go (func() {
 					outer:
 						for {
@@ -717,6 +740,20 @@ func main() {
 							}
 						}
 					})()
+
+					// Monitoring
+					go func() {
+						for {
+							v, err := port.GetTemperature(chipId)
+							if err != nil {
+								log.Printf("[%2d] %v\n", boardId, err)
+								delayRetry()
+								continue
+							}
+							stats.Temperatures[boardId][chipId-1] = v
+							delayRetry()
+						}
+					}()
 				}
 			})()
 		}
