@@ -642,6 +642,11 @@ func main() {
 	// Check supervised flag
 	if supervised != nil && *supervised {
 		log.Println("Running in supervised mode")
+
+		// Start Leds
+		StartLed()
+
+		// Define Ports
 		ports := []string{
 			"/dev/ttyO1",
 			"/dev/ttyO2",
@@ -657,8 +662,11 @@ func main() {
 		}
 
 		// Uploading
+		// SetGreenLed(true, true) // It seems that uploadBitstream enables green led blinking anyway
+		SetRedLed(false, false)
 		log.Println("Uploading bit stream...")
 		uploadBitstream()
+		SetGreenLed(true, true)
 
 		// Loading config
 		log.Println("Loading initial config...")
@@ -719,31 +727,32 @@ func main() {
 								delayRetry()
 								continue
 							}
-
-							// Process
 							if result == nil {
 								log.Printf("Unable to get results")
-							} else {
-
-								// Apply stats
-								applyMined(&stats, int64(*iterations)*IterationsMultiplier)
-
-								// Check if not enough zeros
-								for i := 0; i < 5; i++ {
-									if result.Value[i] != 0 {
-										continue outer
-									}
-								}
-
-								// Report
-								reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
+								delayRetry()
+								continue
 							}
+
+							// Apply stats
+							applyMined(&stats, int64(*iterations)*IterationsMultiplier)
+
+							// Check if not enough zeros
+							for i := 0; i < 5; i++ {
+								if result.Value[i] != 0 {
+									continue outer
+								}
+							}
+
+							// Report
+							reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
 						}
 					})()
 
 					// Monitoring
 					go func() {
 						for {
+
+							// Collect temperature
 							v, err := port.GetTemperature(chipId)
 							if err != nil {
 								log.Printf("[%2d] %v\n", boardId, err)
@@ -751,12 +760,32 @@ func main() {
 								continue
 							}
 							stats.Temperatures[boardId][chipId-1] = v
+
+							// Delay
 							delayRetry()
 						}
 					}()
 				}
 			})()
 		}
+
+		go (func() {
+			time.Sleep(20 * time.Second)
+
+			for {
+				// Monitor hashrate
+				if stats.Hashrate < 1000 {
+					SetRedLed(true, true)
+					SetGreenLed(false, false)
+				} else {
+					SetRedLed(false, false)
+					SetGreenLed(true, true)
+				}
+
+				// Delay
+				delayRetry()
+			}
+		})()
 
 		// Infinite loop
 		startStatsReporting(&stats)
