@@ -737,7 +737,7 @@ func main() {
 							applyMined(&stats, int64(*iterations)*IterationsMultiplier)
 
 							// Check if not enough zeros
-							for i := 0; i < 5; i++ {
+							for i := 0; i < 4; i++ {
 								if result.Value[i] != 0 {
 									continue outer
 								}
