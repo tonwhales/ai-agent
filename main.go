@@ -742,6 +742,9 @@ func main() {
 									continue outer
 								}
 							}
+							if result.Value[4] > 0x0f {
+								continue outer
+							}
 
 							// Report
 							reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
