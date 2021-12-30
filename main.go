@@ -28,7 +28,7 @@ import (
 //
 
 const NonceSize = 8
-const IterationsMultiplier = 1 * 4 // 4 cores per chip
+const IterationsMultiplier = 1 * 3 // 4 cores per chip
 
 type Config struct {
 	Key    string
