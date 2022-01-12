@@ -297,7 +297,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 	}
 }
 
-func uploadBitstream() {
+func uploadBitstream(name string) {
 	// Disable output buffering, enable streaming
 	cmdOptions := cmd.Options{
 		Buffered:  false,
@@ -305,7 +305,7 @@ func uploadBitstream() {
 	}
 
 	// Create Cmd with options
-	envCmd := cmd.NewCmdOptions(cmdOptions, "/monad/imperium/software/utility", "upload", "/monad/imperium/software/work/ai.bit")
+	envCmd := cmd.NewCmdOptions(cmdOptions, "/monad/imperium/software/utility", "upload", "/monad/imperium/software/work/"+name)
 	envCmd.Dir = "/monad/imperium/software/"
 
 	// Print STDOUT and STDERR lines streaming from Cmd
@@ -486,6 +486,7 @@ func main() {
 	env := flag.String("dc", "dev", "DC ID")
 	supervised := flag.Bool("supervised", false, "Supervised invironment")
 	chip := flag.Int("chip", 6, "Working Chip ID")
+	bitstream := flag.String("bitstream", "ai.bit", "Bitstream to use")
 	flag.Parse()
 
 	// Resolve Device ID and Name
@@ -665,7 +666,7 @@ func main() {
 		// SetGreenLed(true, true) // It seems that uploadBitstream enables green led blinking anyway
 		SetRedLed(false, false)
 		log.Println("Uploading bit stream...")
-		uploadBitstream()
+		uploadBitstream(*bitstream)
 		SetGreenLed(true, true)
 
 		// Loading config
