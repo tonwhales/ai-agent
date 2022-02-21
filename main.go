@@ -158,7 +158,14 @@ type JobResult struct {
 func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int, board int, chip int, doLogging bool) (*JobResult, error) {
 
 	// Hash prefix
-	prefix := data[:64]
+	prefix1 := data[:64]
+	prefix2 := data[:64]
+	prefix3 := data[:64]
+	prefix4 := data[:64]
+	expiresData := data[8:12]
+	expires := binary.LittleEndian.Uint32(expiresData)
+	log.Printf("[%2d] Expires          : %d\n", board, expires)
+
 	dg := &digest{}
 	dg.h[0] = init0
 	dg.h[1] = init1
@@ -168,10 +175,47 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 	dg.h[5] = init5
 	dg.h[6] = init6
 	dg.h[7] = init7
-	blockGeneric(dg, prefix)
+	blockGeneric(dg, prefix1)
 	dgst1 := getDigest(*dg)
+
+	dg = &digest{}
+	dg.h[0] = init0
+	dg.h[1] = init1
+	dg.h[2] = init2
+	dg.h[3] = init3
+	dg.h[4] = init4
+	dg.h[5] = init5
+	dg.h[6] = init6
+	dg.h[7] = init7
+	blockGeneric(dg, prefix2)
+	dgst2 := getDigest(*dg)
+
+	dg = &digest{}
+	dg.h[0] = init0
+	dg.h[1] = init1
+	dg.h[2] = init2
+	dg.h[3] = init3
+	dg.h[4] = init4
+	dg.h[5] = init5
+	dg.h[6] = init6
+	dg.h[7] = init7
+	blockGeneric(dg, prefix3)
+	dgst3 := getDigest(*dg)
+
+	dg = &digest{}
+	dg.h[0] = init0
+	dg.h[1] = init1
+	dg.h[2] = init2
+	dg.h[3] = init3
+	dg.h[4] = init4
+	dg.h[5] = init5
+	dg.h[6] = init6
+	dg.h[7] = init7
+	blockGeneric(dg, prefix4)
+	dgst4 := getDigest(*dg)
+
 	if doLogging {
-		log.Printf("[%2d] H          : %x\n", board, dgst1)
+		log.Printf("[%2d] H          : %x,%x,%x,%x\n", board, dgst1, dgst2, dgst3, dgst4)
 	}
 
 	// Suffix
@@ -182,6 +226,9 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 	// Calculate job
 	job := []byte{}
 	job = append(job, dgst1...)
+	job = append(job, dgst2...)
+	job = append(job, dgst3...)
+	job = append(job, dgst4...)
 	job = append(job, suffix...)
 	tmp := make([]byte, 4)
 	binary.BigEndian.PutUint32(tmp, iterations)
@@ -221,6 +268,9 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 				xored[i+48] = nonce[i]
 				nrandom[i+21] = nonce[i]
 			}
+
+			// TODO:L
+			prefix := prefix1
 
 			// Check hash
 			sh := sha256.New()
@@ -268,7 +318,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 
 			// Calculate hash
 			sh := sha256.New()
-			sh.Write(prefix)
+			sh.Write(data)
 			sh.Write(xored[:64-5])
 			localHash := sh.Sum(nil)
 
