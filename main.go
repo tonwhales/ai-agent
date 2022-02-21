@@ -83,20 +83,22 @@ func loadConfigRetry() Config {
 }
 
 type Report struct {
-	Device string `json:"device"`
-	Key    string `json:"key"`
-	Random string `json:"random"`
-	Value  string `json:"value"`
+	Device  string `json:"device"`
+	Key     string `json:"key"`
+	Random  string `json:"random"`
+	Value   string `json:"value"`
+	Expires uint32 `json:"expires"`
 }
 
-func doReport(device string, key string, random []byte, seed []byte, value []byte) error {
+func doReport(device string, key string, random []byte, seed []byte, value []byte, expires uint32) error {
 
 	// Encode report
 	data := Report{
-		Device: device,
-		Key:    key,
-		Random: base64.StdEncoding.EncodeToString(random),
-		Value:  base64.StdEncoding.EncodeToString(value),
+		Device:  device,
+		Key:     key,
+		Random:  base64.StdEncoding.EncodeToString(random),
+		Value:   base64.StdEncoding.EncodeToString(value),
+		Expires: expires,
 	}
 	dataBin, err := json.Marshal(data)
 	if err != nil {
@@ -125,10 +127,10 @@ func delayRetry() {
 	time.Sleep(5 * time.Second)
 }
 
-func reportAsync(device string, key string, random []byte, seed []byte, value []byte) {
+func reportAsync(device string, key string, random []byte, seed []byte, value []byte, expires uint32) {
 	go (func() {
 		for {
-			err := doReport(device, key, random, seed, value)
+			err := doReport(device, key, random, seed, value, expires)
 			if err == nil {
 				return
 			}
@@ -151,20 +153,23 @@ func getDigest(d digest) []byte {
 }
 
 type JobResult struct {
-	Random []byte
-	Value  []byte
+	Expires uint32
+	Random  []byte
+	Value   []byte
 }
 
 func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int, board int, chip int, doLogging bool) (*JobResult, error) {
 
 	// Hash prefix
-	prefix1 := data[:64]
-	prefix2 := data[:64]
-	prefix3 := data[:64]
-	prefix4 := data[:64]
-	expiresData := data[8:12]
-	expires := binary.LittleEndian.Uint32(expiresData)
-	log.Printf("[%2d] Expires          : %d\n", board, expires)
+	expiresData := data[7:11]
+	expires := binary.BigEndian.Uint32(expiresData)
+	prefix1 := append([]byte(nil), data[:64]...)
+	prefix2 := append([]byte(nil), data[:64]...)
+	prefix3 := append([]byte(nil), data[:64]...)
+	prefix4 := append([]byte(nil), data[:64]...)
+	binary.BigEndian.PutUint32(prefix2[7:11], expires-1)
+	binary.BigEndian.PutUint32(prefix3[7:11], expires-2)
+	binary.BigEndian.PutUint32(prefix4[7:11], expires-3)
 
 	dg := &digest{}
 	dg.h[0] = init0
@@ -259,7 +264,9 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 
 			// Prepare Data
 			hash := jobResponse[0:32]
-			nonce := jobResponse[32 : 32+NonceSize]
+			nonce := jobResponse[32 : 32+4]
+			prefixIdRaw := jobResponse[32+4 : 32+4+4]
+			prefixId := binary.BigEndian.Uint32(prefixIdRaw)
 			xored := append([]byte(nil), suffix...)
 			nrandom := append([]byte(nil), random...)
 			index := nonce[len(nonce)-1] - suffix[len(nonce)-1]
@@ -268,9 +275,23 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 				xored[i+48] = nonce[i]
 				nrandom[i+21] = nonce[i]
 			}
+			log.Printf("[%2d] PREFIX ID          : %d", board, prefixId)
 
 			// TODO:L
+			resExpires := expires
 			prefix := prefix1
+			if prefixId == 2 {
+				prefix = prefix2
+				resExpires = resExpires - 1
+			}
+			if prefixId == 3 {
+				prefix = prefix3
+				resExpires = resExpires - 2
+			}
+			if prefixId == 4 {
+				prefix = prefix4
+				resExpires = resExpires - 3
+			}
 
 			// Check hash
 			sh := sha256.New()
@@ -295,7 +316,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 				return nil, fmt.Errorf("hash mismatch. Expected %x, but got %x", localHash, hash)
 			}
 
-			return &JobResult{Random: nrandom, Value: localHash}, nil
+			return &JobResult{Random: nrandom, Value: localHash, Expires: resExpires}, nil
 		}
 	} else {
 
@@ -798,7 +819,7 @@ func main() {
 							}
 
 							// Report
-							reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
+							reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value, result.Expires)
 						}
 					})()
 
@@ -947,7 +968,7 @@ func main() {
 					applyMined(&stats, int64(*iterations)*IterationsMultiplier)
 
 					// Report
-					reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value)
+					reportAsync(deviceName, config.Key, result.Random, config.Seed, result.Value, result.Expires)
 				}
 			}
 		})()
