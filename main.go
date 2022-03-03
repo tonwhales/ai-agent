@@ -279,15 +279,15 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 			// TODO:L
 			resExpires := expires
 			prefix := prefix1
-			if prefixId == 2 {
+			if prefixId == 1 {
 				prefix = prefix2
 				resExpires = resExpires - 1
 			}
-			if prefixId == 3 {
+			if prefixId == 2 {
 				prefix = prefix3
 				resExpires = resExpires - 2
 			}
-			if prefixId == 4 {
+			if prefixId == 3 {
 				prefix = prefix4
 				resExpires = resExpires - 3
 			}
