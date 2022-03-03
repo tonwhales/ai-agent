@@ -275,7 +275,6 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 				xored[i+48] = nonce[i]
 				nrandom[i+21] = nonce[i]
 			}
-			log.Printf("[%2d] PREFIX ID          : %d", board, prefixId)
 
 			// TODO:L
 			resExpires := expires
@@ -301,6 +300,7 @@ func performJob(port *SerialChannel, data []byte, iterations uint32, timeout int
 
 			// Print results
 			if doLogging {
+				log.Printf("[%2d] PREFIX ID    : %d", board, prefixId)
 				log.Printf("[%2d] RAW          : %x", board, jobResponse)
 				log.Printf("[%2d] DATA         : %x", board, suffix)
 				log.Printf("[%2d] PREPARED DATA: %x", board, xored)
