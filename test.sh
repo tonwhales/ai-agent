@@ -9,7 +9,7 @@ set -e
 scp -i ../keys/id_rsa_openssh ./build/ai-linux-arm root@192.168.16.120:/monad/ai/ai-linux-arm
 scp -i ../keys/id_rsa_openssh ./bits/test5.bit root@192.168.16.120:/monad/led_ctrl/R2.bit
 scp -i ../keys/id_rsa_openssh ./test_0001.hex root@192.168.16.120:/monad/ai/test_0001.hex
-scp -i ../keys/id_rsa_openssh ./bits/f11.bit root@192.168.16.120:/monad/ai/ai.bit
+scp -i ../keys/id_rsa_openssh ./bits/f13.bit root@192.168.16.120:/monad/ai/ai.bit
 # scp -i ../keys/id_rsa_openssh ./bits/i37.bit root@192.168.16.120:/monad/ai/ai.bit
 scp -i ../keys/id_rsa_openssh ./test_launch.sh root@192.168.16.120:/monad/ai/test_launch.sh
 ssh -i ../keys/id_rsa_openssh root@192.168.16.120 "sh /monad/ai/test_launch.sh"
