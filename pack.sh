@@ -12,7 +12,7 @@ rm -fr package
 mkdir package
 cp ai-linux-arm ./package/
 cp ../bits/f14.bit ./package/ai.bit
-cp ../bits/r2_2.bit ./package/ai_2.bit
+cp ../bits/r2_3.bit ./package/ai_2.bit
 cp ../scripts/install.sh ./package/install.sh
 cp ../scripts/start.sh ./package/start.sh
 cd package
